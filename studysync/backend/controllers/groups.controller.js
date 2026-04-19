@@ -58,7 +58,7 @@ async function getNearbyGroups(req, res) {
        WHERE g.status = 'active'
          AND g.expires_at > NOW()
        GROUP BY g.group_id
-       HAVING distance_km <= 5
+       HAVING distance_km <= 10
        ORDER BY distance_km ASC`,
       [lat, lng, lat]
     );

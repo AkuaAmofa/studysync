@@ -536,7 +536,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppConstants.primaryColor,
         foregroundColor: Colors.white,
-        onPressed: () => context.push('/map/create-group'),
+        onPressed: () async {
+          await context.push('/map/create-group');
+          _fetchGroups();
+        },
         tooltip: 'Create group',
         child: const Icon(Icons.add),
       ),

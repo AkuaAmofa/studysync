@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -66,10 +67,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     setState(() => _shakeToFind = value);
     if (value) {
       _shakeSub = accelerometerEventStream().listen((event) {
-        final magnitude = event.x.abs() + event.y.abs() + event.z.abs();
+        const threshold = 25.0;
+        final magnitude = sqrt(
+            event.x * event.x + event.y * event.y + event.z * event.z) - 9.8;
         final now = DateTime.now();
-        if (magnitude > 15 &&
-            now.difference(_lastShake).inMilliseconds > 1000) {
+        if (magnitude > threshold &&
+            now.difference(_lastShake).inMilliseconds > 2000) {
           _lastShake = now;
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
