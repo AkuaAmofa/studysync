@@ -1,40 +1,567 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:studysync/core/constants/app_constants.dart';
+import 'package:studysync/core/providers/app_providers.dart';
 
-// TODO: MapScreen — the main map view showing nearby active study groups as
-// custom markers on a GoogleMap widget. Uses LocationService to centre the
-// camera on the user's position. Tapping a marker navigates to
-// /map/group/:id. A FAB opens /map/create-group. Refreshes group pins
-// every 30 seconds via a periodic timer.
-
-class MapScreen extends StatefulWidget {
+class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen> {
+  final _mapController = MapController();
+  LatLng? _currentPosition;
+  List<Map<String, dynamic>> _groups = [];
+  List<Marker> _markers = [];
+  String _selectedFilter = 'All';
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  bool _isLoading = true;
+  String? _locationError;
+  Timer? _refreshTimer;
+
+  static const _filters = ['All', 'CS', 'Business', 'MIS', 'Engineering'];
+
+  // ── Lifecycle ────────────────────────────────────────────────────────────
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Study Map')),
-      body: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map_outlined, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Map coming soon'),
-          ],
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() => _searchQuery = _searchController.text);
+    });
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _mapController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── Init & data fetching ─────────────────────────────────────────────────
+
+  static const _ashesi = LatLng(5.7602, -0.2168);
+
+  Future<void> _init() async {
+    debugPrint('[MapScreen] Starting location init...');
+    final locationService = ref.read(locationServiceProvider);
+    final position = await locationService.getCurrentPosition();
+    if (!mounted) return;
+
+    final latLng = position != null
+        ? LatLng(position.latitude, position.longitude)
+        : _ashesi;
+
+    debugPrint('[MapScreen] Using position: ${latLng.latitude}, ${latLng.longitude}');
+
+    // Set position and immediately draw the user pin — don't wait for groups.
+    setState(() {
+      _currentPosition = latLng;
+      _isLoading = false;
+      _rebuildMarkers();
+    });
+
+    _mapController.move(latLng, 17.0);
+    await _fetchGroups();
+
+    // If we got a real GPS fix, recenter once groups are loaded.
+    if (position != null && mounted) {
+      _mapController.move(latLng, 17.0);
+    }
+
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchGroups(),
+    );
+  }
+
+  Future<void> _fetchGroups() async {
+    if (_currentPosition == null) return;
+    try {
+      final groupService = ref.read(groupServiceProvider);
+      final groups = await groupService.getNearbyGroups(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
+      if (mounted) {
+        setState(() {
+          _groups = groups;
+          _rebuildMarkers();
+        });
+      }
+    } catch (_) {
+      // Silently swallow refresh errors — stale data is acceptable.
+    }
+  }
+
+  void _rebuildMarkers() {
+    final markers = <Marker>[];
+
+    if (_currentPosition != null) {
+      markers.add(Marker(
+        point: _currentPosition!,
+        width: 44,
+        height: 44,
+        child: const _PinMarker(
+          color: AppConstants.primaryColor,
+          icon: Icons.person_pin_circle,
+          tooltip: 'You are here',
+        ),
+      ));
+    }
+
+    for (final group in _groups) {
+      final lat = (group['latitude'] as num?)?.toDouble();
+      final lng = (group['longitude'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      final course = group['course_name'] as String? ?? '';
+      final memberCount = group['member_count'] ?? 0;
+      final maxSize = group['max_size'] ?? '?';
+      markers.add(Marker(
+        point: LatLng(lat, lng),
+        width: 44,
+        height: 44,
+        child: _PinMarker(
+          color: AppConstants.secondaryColor,
+          icon: Icons.location_on,
+          tooltip: '$course · $memberCount/$maxSize',
+        ),
+      ));
+    }
+
+    _markers = markers;
+  }
+
+  // ── Filtering ─────────────────────────────────────────────────────────────
+
+  List<Map<String, dynamic>> get _filteredGroups {
+    return _groups.where((g) {
+      final course = (g['course_name'] as String? ?? '').toLowerCase();
+      final matchesSearch =
+          _searchQuery.isEmpty || course.contains(_searchQuery.toLowerCase());
+      final matchesChip =
+          _selectedFilter == 'All' || _chipMatches(course, _selectedFilter);
+      return matchesSearch && matchesChip;
+    }).toList();
+  }
+
+  bool _chipMatches(String course, String filter) {
+    return switch (filter) {
+      'CS' => course.contains('cs') || course.contains('computer'),
+      'Business' => course.contains('business'),
+      'MIS' =>
+        course.contains('mis') || course.contains('management information'),
+      'Engineering' => course.contains('engineering'),
+      _ => true,
+    };
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  Future<void> _joinGroup(String groupId) async {
+    final groupService = ref.read(groupServiceProvider);
+    final success = await groupService.joinGroup(groupId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? 'Joined!' : 'Could not join group.'),
+        backgroundColor:
+            success ? AppConstants.secondaryColor : Colors.redAccent,
+      ),
+    );
+    if (success) _fetchGroups();
+  }
+
+  // ── Build helpers ─────────────────────────────────────────────────────────
+
+  Widget _buildSearchBar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [
+              BoxShadow(
+                  color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+            ],
+          ),
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: 'Search by course e.g. CS 341...',
+              hintStyle: TextStyle(fontSize: 14, color: Colors.black38),
+              prefixIcon:
+                  Icon(Icons.search, color: AppConstants.primaryColor),
+              border: InputBorder.none,
+              contentPadding:
+                  EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _filters.map((f) {
+              final selected = _selectedFilter == f;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(f),
+                  selected: selected,
+                  onSelected: (_) => setState(() => _selectedFilter = f),
+                  selectedColor: AppConstants.primaryColor,
+                  labelStyle: TextStyle(
+                    color: selected
+                        ? Colors.white
+                        : AppConstants.darkTextColor,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                  backgroundColor: Colors.white,
+                  side: BorderSide(
+                    color: selected
+                        ? AppConstants.primaryColor
+                        : Colors.grey.shade300,
+                  ),
+                  showCheckmark: false,
+                  elevation: selected ? 2 : 0,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupList(ScrollController scrollController) {
+    final groups = _filteredGroups;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black12,
+              blurRadius: 12,
+              offset: Offset(0, -2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  '${groups.length} group${groups.length == 1 ? '' : 's'} nearby',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.darkTextColor,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh,
+                      color: AppConstants.primaryColor, size: 20),
+                  onPressed: _fetchGroups,
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: groups.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'No groups nearby.\nCreate one with the + button!',
+                        textAlign: TextAlign.center,
+                        style:
+                            TextStyle(color: Colors.black54, fontSize: 14),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    itemCount: groups.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _buildGroupCard(groups[i]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupCard(Map<String, dynamic> group) {
+    final groupId = group['group_id'] as String? ?? '';
+    final course = group['course_name'] as String? ?? '';
+    final locationName = group['location_name'] as String? ?? '';
+    final memberCount = group['member_count'] ?? 0;
+    final maxSize = group['max_size'] ?? '?';
+    final distance = group['distance_km'];
+
+    return Card(
+      elevation: 1,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: groupId.isEmpty
+            ? null
+            : () => context.push('/map/group/$groupId'),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 5, color: AppConstants.primaryColor),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppConstants.primaryColor,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              course,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.people_outline,
+                              size: 14, color: Colors.black54),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$memberCount / $maxSize',
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined,
+                              size: 13, color: Colors.black45),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              locationName,
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.black54),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (distance != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '${(distance as num).toStringAsFixed(1)} km',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.black38),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: ElevatedButton(
+                    onPressed: groupId.isEmpty
+                        ? null
+                        : () => _joinGroup(groupId),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppConstants.secondaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      elevation: 0,
+                    ),
+                    child: const Text('Join',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: context.push('/map/create-group')
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('New Group'),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Scaffold(
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                      color: AppConstants.primaryColor),
+                  SizedBox(height: 16),
+                  Text('Getting your location…',
+                      style: TextStyle(color: Colors.black54)),
+                ],
+              ),
+            )
+          : _locationError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_off,
+                            size: 64, color: Colors.black26),
+                        const SizedBox(height: 16),
+                        Text(_locationError!,
+                            textAlign: TextAlign.center,
+                            style:
+                                const TextStyle(color: Colors.black54)),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _isLoading = true;
+                              _locationError = null;
+                            });
+                            _init();
+                          },
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppConstants.primaryColor,
+                              foregroundColor: Colors.white),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Stack(
+                  children: [
+                    // ── OpenStreetMap via flutter_map ────────────────────
+                    FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _currentPosition ??
+                            const LatLng(5.7602, -0.2168),
+                        initialZoom: 16,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.ashesi.studysync',
+                        ),
+                        MarkerLayer(markers: _markers),
+                      ],
+                    ),
+
+                    // ── Search bar + filter chips ────────────────────────
+                    Positioned(
+                      top: topPadding + 8,
+                      left: 12,
+                      right: 12,
+                      child: _buildSearchBar(),
+                    ),
+
+                    // ── Draggable bottom sheet ───────────────────────────
+                    DraggableScrollableSheet(
+                      initialChildSize: 0.35,
+                      minChildSize: 0.1,
+                      maxChildSize: 0.7,
+                      builder: (_, scrollController) =>
+                          _buildGroupList(scrollController),
+                    ),
+                  ],
+                ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppConstants.primaryColor,
+        foregroundColor: Colors.white,
+        onPressed: () => context.push('/map/create-group'),
+        tooltip: 'Create group',
+        child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+// Reusable map pin widget — avoids BitmapDescriptor entirely.
+class _PinMarker extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  final String tooltip;
+
+  const _PinMarker({
+    required this.color,
+    required this.icon,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Icon(icon, color: color, size: 36,
+          shadows: const [Shadow(color: Colors.black26, blurRadius: 4)]),
     );
   }
 }

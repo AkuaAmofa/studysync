@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:studysync/core/providers/app_providers.dart';
 import 'package:studysync/features/admin/screens/admin_dashboard_screen.dart';
 import 'package:studysync/features/auth/screens/login_screen.dart';
 import 'package:studysync/features/auth/screens/register_screen.dart';
@@ -11,7 +12,6 @@ import 'package:studysync/features/map/screens/map_screen.dart';
 import 'package:studysync/features/profile/screens/profile_screen.dart';
 import 'package:studysync/features/splash/screens/splash_screen.dart';
 
-// Shell scaffold that holds the bottom navigation bar.
 class _ShellScaffold extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
@@ -40,7 +40,6 @@ class _ShellScaffold extends StatelessWidget {
   }
 }
 
-// A minimal placeholder for the /groups tab inside the shell.
 class _GroupsListScreen extends StatelessWidget {
   const _GroupsListScreen();
 
@@ -53,11 +52,31 @@ class _GroupsListScreen extends StatelessWidget {
   }
 }
 
+// Routes that require authentication (shell routes).
+const _protectedPaths = ['/map', '/groups', '/camera', '/profile'];
+
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authService = ref.read(authServiceProvider);
+
   return GoRouter(
     initialLocation: '/splash',
+    redirect: (context, state) async {
+      final path = state.matchedLocation;
+
+      // Let splash handle its own redirect.
+      if (path == '/splash') return null;
+
+      final isAuth = await authService.isLoggedIn();
+      final isOnAuth = path == '/login' || path == '/register';
+      final isProtected =
+          _protectedPaths.any((p) => path == p || path.startsWith('$p/'));
+
+      if (!isAuth && isProtected) return '/login';
+      if (isAuth && isOnAuth) return '/map';
+      return null;
+    },
     routes: [
-      // ── Unauthenticated routes ──────────────────────────────────────────
+      // ── Unauthenticated ────────────────────────────────────────────────
       GoRoute(
         path: '/splash',
         builder: (_, _) => const SplashScreen(),
@@ -71,17 +90,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const RegisterScreen(),
       ),
 
-      // ── Admin (standalone, no bottom nav) ──────────────────────────────
+      // ── Admin ──────────────────────────────────────────────────────────
       GoRoute(
         path: '/admin',
         builder: (_, _) => const AdminDashboardScreen(),
       ),
 
-      // ── Main shell with bottom navigation ──────────────────────────────
+      // ── Main shell with bottom navigation ─────────────────────────────
       StatefulShellRoute.indexedStack(
         builder: (_, _, shell) => _ShellScaffold(navigationShell: shell),
         branches: [
-          // Branch 0 — Map
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -102,8 +120,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-
-          // Branch 1 — Groups list
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -112,8 +128,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-
-          // Branch 2 — Camera
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -122,8 +136,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-
-          // Branch 3 — Profile
           StatefulShellBranch(
             routes: [
               GoRoute(

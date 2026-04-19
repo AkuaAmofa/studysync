@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/db');
 
 async function joinGroup(req, res) {
@@ -32,8 +33,8 @@ async function joinGroup(req, res) {
     }
 
     await pool.query(
-      'INSERT INTO ss_group_members (group_id, user_id) VALUES (?, ?)',
-      [group_id, user_id]
+      'INSERT INTO ss_group_members (member_id, group_id, user_id) VALUES (?, ?, ?)',
+      [uuidv4(), group_id, user_id]
     );
 
     return res.status(200).json({ message: 'Joined group successfully' });

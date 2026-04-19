@@ -1,50 +1,76 @@
-import 'package:studysync/models/group_model.dart';
-import 'package:studysync/models/member_model.dart';
+import 'package:dio/dio.dart';
+import 'package:studysync/core/constants/app_constants.dart';
+import 'package:studysync/services/auth_service.dart';
 
-/// Manages study group CRUD operations and membership.
-/// TODO: Implement all methods against the Node.js REST API at /api/groups.
 class GroupService {
-  Future<List<GroupModel>> getNearbyGroups({
-    required double latitude,
-    required double longitude,
-    double radiusKm = 2.0,
-  }) async {
-    // TODO: GET /api/groups?lat=&lng=&radius=
-    return [];
+  final AuthService _authService;
+  final Dio _dio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+
+  GroupService({required AuthService authService})
+      : _authService = authService;
+
+  Future<Options> _authOptions() async {
+    final token = await _authService.getToken();
+    return Options(headers: {'Authorization': 'Bearer $token'});
   }
 
-  Future<GroupModel> createGroup({
-    required String name,
-    required String subject,
-    required String description,
-    required double latitude,
-    required double longitude,
-    required String locationName,
-    required int maxMembers,
-  }) async {
-    // TODO: POST /api/groups
-    throw UnimplementedError('createGroup not yet implemented');
+  Future<List<Map<String, dynamic>>> getNearbyGroups(
+      double lat, double lng) async {
+    final response = await _dio.get(
+      '/groups/nearby',
+      queryParameters: {'lat': lat, 'lng': lng},
+      options: await _authOptions(),
+    );
+    final raw = response.data['groups'] as List;
+    return raw.map((g) => Map<String, dynamic>.from(g as Map)).toList();
   }
 
-  Future<GroupModel> getGroupById(String groupId) async {
-    // TODO: GET /api/groups/:id
-    throw UnimplementedError('getGroupById not yet implemented');
+  Future<bool> joinGroup(String groupId) async {
+    try {
+      await _dio.post('/groups/$groupId/join', options: await _authOptions());
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<void> joinGroup(String groupId) async {
-    // TODO: POST /api/groups/:id/join
+  Future<Map<String, dynamic>> createGroup(Map<String, dynamic> data) async {
+    final response = await _dio.post(
+      '/groups',
+      data: data,
+      options: await _authOptions(),
+    );
+    return Map<String, dynamic>.from(response.data['group'] as Map);
   }
 
-  Future<void> leaveGroup(String groupId) async {
-    // TODO: DELETE /api/groups/:id/members/me
+  Future<Map<String, dynamic>> getGroupById(String groupId) async {
+    final response = await _dio.get(
+      '/groups/$groupId',
+      options: await _authOptions(),
+    );
+    return Map<String, dynamic>.from(response.data['group'] as Map);
   }
 
-  Future<List<MemberModel>> getGroupMembers(String groupId) async {
-    // TODO: GET /api/groups/:id/members
-    return [];
+  Future<bool> leaveGroup(String groupId) async {
+    try {
+      await _dio.delete('/groups/$groupId/leave',
+          options: await _authOptions());
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<void> deleteGroup(String groupId) async {
-    // TODO: DELETE /api/groups/:id (admin or creator only)
+  Future<void> endGroup(String groupId) async {
+    await _dio.patch('/groups/$groupId/end', options: await _authOptions());
+  }
+
+  Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
+    final response = await _dio.get(
+      '/groups/$groupId/members',
+      options: await _authOptions(),
+    );
+    final raw = response.data['members'] as List;
+    return raw.map((m) => Map<String, dynamic>.from(m as Map)).toList();
   }
 }

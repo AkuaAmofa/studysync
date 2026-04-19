@@ -6,7 +6,10 @@ import 'package:studysync/services/storage_service.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
-final groupServiceProvider = Provider<GroupService>((ref) => GroupService());
+final groupServiceProvider = Provider<GroupService>((ref) {
+  final authService = ref.read(authServiceProvider);
+  return GroupService(authService: authService);
+});
 
 final locationServiceProvider =
     Provider<LocationService>((ref) => LocationService());

@@ -21,8 +21,8 @@ async function createGroup(req, res) {
     );
 
     await pool.query(
-      `INSERT INTO ss_group_members (group_id, user_id) VALUES (?, ?)`,
-      [group_id, creator_id]
+      `INSERT INTO ss_group_members (member_id, group_id, user_id) VALUES (?, ?, ?)`,
+      [uuidv4(), group_id, creator_id]
     );
 
     const [rows] = await pool.query(

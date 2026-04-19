@@ -1,39 +1,65 @@
-import 'package:studysync/models/user_model.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:studysync/core/constants/app_constants.dart';
 
-/// Handles authentication: login, register, logout, and session persistence.
-/// TODO: Implement JWT-based auth against the Node.js backend at /api/auth.
 class AuthService {
-  UserModel? _currentUser;
+  final Dio _dio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+  static const _storage = FlutterSecureStorage();
 
-  UserModel? get currentUser => _currentUser;
-
-  bool get isLoggedIn => _currentUser != null;
-
-  Future<UserModel> login({
-    required String email,
-    required String password,
-  }) async {
-    // TODO: POST /api/auth/login, store token in flutter_secure_storage
-    throw UnimplementedError('login not yet implemented');
-  }
-
-  Future<UserModel> register({
+  Future<Map<String, dynamic>> register({
     required String name,
     required String email,
     required String password,
-    String? studentId,
+    required String programme,
+    required int yearGroup,
   }) async {
-    // TODO: POST /api/auth/register
-    throw UnimplementedError('register not yet implemented');
+    final response = await _dio.post('/auth/register', data: {
+      'name': name,
+      'email': email,
+      'password': password,
+      'programme': programme,
+      'year_group': yearGroup,
+    });
+    final token = response.data['token'] as String;
+    final user = Map<String, dynamic>.from(response.data['user'] as Map);
+    await _storage.write(key: 'token', value: token);
+    await _storage.write(key: 'user', value: jsonEncode(user));
+    return user;
+  }
+
+  Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _dio.post('/auth/login', data: {
+      'email': email,
+      'password': password,
+    });
+    final token = response.data['token'] as String;
+    final user = Map<String, dynamic>.from(response.data['user'] as Map);
+    await _storage.write(key: 'token', value: token);
+    await _storage.write(key: 'user', value: jsonEncode(user));
+    return user;
   }
 
   Future<void> logout() async {
-    // TODO: Clear token from secure storage and invalidate session
-    _currentUser = null;
+    await _storage.delete(key: 'token');
+    await _storage.delete(key: 'user');
   }
 
-  Future<UserModel?> restoreSession() async {
-    // TODO: Read token from flutter_secure_storage, validate with backend
-    return null;
+  Future<bool> isLoggedIn() async {
+    final token = await _storage.read(key: 'token');
+    return token != null && token.isNotEmpty;
+  }
+
+  Future<String?> getToken() async {
+    return _storage.read(key: 'token');
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    final userJson = await _storage.read(key: 'user');
+    if (userJson == null) return null;
+    return Map<String, dynamic>.from(jsonDecode(userJson) as Map);
   }
 }
