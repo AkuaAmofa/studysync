@@ -1,0 +1,82 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const pool = require('../config/db');
+
+async function register(req, res) {
+  try {
+    const { name, email, password, programme, year_group } = req.body;
+
+    if (!name || !email || !password || !programme || !year_group) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const [existing] = await pool.query(
+      'SELECT user_id FROM ss_users WHERE email = ?',
+      [email]
+    );
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+    const user_id = uuidv4();
+
+    await pool.query(
+      `INSERT INTO ss_users (user_id, name, email, password_hash, programme, year_group)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [user_id, name, email, password_hash, programme, year_group]
+    );
+
+    const token = jwt.sign(
+      { user_id, email, role: 'user' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(201).json({
+      token,
+      user: { user_id, name, email, programme, year_group, role: 'user' },
+    });
+  } catch (err) {
+    console.error('register error:', err);
+    return res.status(500).json({ error: 'Server error during registration' });
+  }
+}
+
+async function login(req, res) {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM ss_users WHERE email = ?', [
+      email,
+    ]);
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { user_id: user.user_id, email: user.email, role: user.role || 'user' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const { password_hash, ...userObj } = user;
+    return res.status(200).json({ token, user: userObj });
+  } catch (err) {
+    console.error('login error:', err);
+    return res.status(500).json({ error: 'Server error during login' });
+  }
+}
+
+module.exports = { register, login };

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "547192318729",
+    "project_id": "studysync-3b538",
+    "storage_bucket": "studysync-3b538.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:547192318729:android:7b713d56e3f469ba72c1d8",
+        "android_client_info": {
+          "package_name": "com.ashesi.studysync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0JqA2ZrTTP5vorUyjsk8rfUSUjoem2eI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
