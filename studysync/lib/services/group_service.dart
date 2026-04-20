@@ -79,10 +79,15 @@ class GroupService {
     required String imageBase64,
     required String caption,
   }) async {
+    final auth = await _authOptions();
     await _dio.post(
       '/groups/$groupId/notes',
       data: {'image_url': imageBase64, 'caption': caption},
-      options: await _authOptions(),
+      options: Options(
+        headers: auth.headers,
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
     );
   }
 

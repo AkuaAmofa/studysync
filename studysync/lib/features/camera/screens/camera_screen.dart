@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -32,8 +33,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     final picker = ImagePicker();
     final image = await picker.pickImage(
       source: source,
-      imageQuality: 70,
-      maxWidth: 1280,
+      imageQuality: 50,
+      maxWidth: 800,
+      maxHeight: 800,
     );
     if (image != null) setState(() => _selectedImage = image);
   }
@@ -48,10 +50,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       return;
     }
 
+    debugPrint('[CameraScreen] Sharing note to group: ${widget.groupId}');
     setState(() => _isUploading = true);
     try {
       final bytes = await File(_selectedImage!.path).readAsBytes();
       final base64Image = base64Encode(bytes);
+      debugPrint('[CameraScreen] Base64 size: ${base64Image.length} chars');
 
       final groupService = ref.read(groupServiceProvider);
       await groupService.addNote(
@@ -63,7 +67,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       if (!mounted) return;
       _snack('Note shared!');
       context.pop();
-    } catch (_) {
+    } on DioException catch (e) {
+      debugPrint('[CameraScreen] DioException: ${e.response?.statusCode} — ${e.response?.data}');
+      if (mounted) {
+        final msg = e.response?.data?['error'] as String? ?? 'Upload failed. Try again.';
+        _snack(msg);
+      }
+    } catch (e) {
+      debugPrint('[CameraScreen] Unexpected error: $e');
       if (mounted) _snack('Failed to share note. Try again.');
     } finally {
       if (mounted) setState(() => _isUploading = false);

@@ -36,7 +36,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
     });
-    _init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _init();
+      // Fetch groups immediately with Ashesi fallback, then again after
+      // GPS has had 2 seconds to lock in a real position.
+      _fetchGroups();
+      Timer(const Duration(seconds: 2), () {
+        if (mounted) _fetchGroups();
+      });
+    });
   }
 
   @override
@@ -85,13 +93,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _fetchGroups() async {
-    if (_currentPosition == null) return;
+    final lat = _currentPosition?.latitude ?? _ashesi.latitude;
+    final lng = _currentPosition?.longitude ?? _ashesi.longitude;
     try {
       final groupService = ref.read(groupServiceProvider);
-      final groups = await groupService.getNearbyGroups(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-      );
+      final groups = await groupService.getNearbyGroups(lat, lng);
       if (mounted) {
         setState(() {
           _groups = groups;
