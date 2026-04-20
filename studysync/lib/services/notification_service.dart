@@ -1,8 +1,18 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:studysync/core/constants/app_constants.dart';
+import 'package:workmanager/workmanager.dart';
+
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    debugPrint('[Workmanager] Background task running: $task');
+    return true;
+  });
+}
 
 // Top-level handler required by FCM for background/terminated messages.
 @pragma('vm:entry-point')
@@ -106,6 +116,20 @@ class NotificationService {
         iOS: const DarwinNotificationDetails(),
       ),
       payload: payload,
+    );
+  }
+
+  static const String statusTaskName = 'studysync.statusTask';
+
+  static Future<void> initBackgroundTask() async {
+    await Workmanager().initialize(callbackDispatcher);
+    await Workmanager().registerPeriodicTask(
+      'studysync-status-task',
+      statusTaskName,
+      frequency: const Duration(minutes: 15),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+      ),
     );
   }
 

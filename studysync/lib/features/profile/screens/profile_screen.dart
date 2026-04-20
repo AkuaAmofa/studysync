@@ -7,6 +7,8 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:studysync/core/constants/app_constants.dart';
 import 'package:studysync/core/providers/app_providers.dart';
+import 'package:studysync/services/notification_service.dart';
+import 'package:workmanager/workmanager.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -21,6 +23,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   bool _pushNotifications = true;
   bool _shakeToFind = false;
+  bool _stayAvailable = false;
   bool _darkMode = false;
 
   StreamSubscription<AccelerometerEvent>? _shakeSub;
@@ -61,6 +64,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     setState(() => _pushNotifications = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('push_notifications', value);
+  }
+
+  Future<void> _setStayAvailable(bool value) async {
+    setState(() => _stayAvailable = value);
+    if (value) {
+      await NotificationService.initBackgroundTask();
+      if (mounted) _snackbar('Background status active');
+    } else {
+      await Workmanager().cancelAll();
+    }
   }
 
   void _setShakeToFind(bool value) {
@@ -268,6 +281,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 title: 'Shake to find group',
                 value: _shakeToFind,
                 onChanged: _setShakeToFind,
+              ),
+              _switchTile(
+                icon: Icons.wifi_tethering,
+                title: 'Stay available',
+                value: _stayAvailable,
+                onChanged: _setStayAvailable,
               ),
               _switchTile(
                 icon: Icons.dark_mode_outlined,

@@ -8,5 +8,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await NotificationService.init();
+  await NotificationService.initBackgroundTask();
   runApp(const ProviderScope(child: StudySyncApp()));
 }
