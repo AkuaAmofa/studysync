@@ -183,7 +183,8 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   Widget _buildHeaderCard() {
     final locationName =
         _group?['location_name'] as String? ?? '—';
-    final memberCount = _group?['member_count'] ?? _members.length;
+    final memberCount =
+        _group?['member_count'] ?? (_members.isEmpty ? 1 : _members.length);
     final maxSize = _group?['max_size'] ?? '?';
     final createdAt = _group?['created_at'] as String?;
     final description = _group?['description'] as String?;

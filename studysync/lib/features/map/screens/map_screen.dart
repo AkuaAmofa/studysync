@@ -124,7 +124,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final lng = (group['longitude'] as num?)?.toDouble();
       if (lat == null || lng == null) continue;
       final course = group['course_name'] as String? ?? '';
-      final memberCount = group['member_count'] ?? 0;
+      final memberCount = group['member_count'] ?? 1;
       final maxSize = group['max_size'] ?? '?';
       markers.add(Marker(
         point: LatLng(lat, lng),
@@ -330,7 +330,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final groupId = group['group_id'] as String? ?? '';
     final course = group['course_name'] as String? ?? '';
     final locationName = group['location_name'] as String? ?? '';
-    final memberCount = group['member_count'] ?? 0;
+    final memberCount = group['member_count'] ?? 1;
     final maxSize = group['max_size'] ?? '?';
     final distance = group['distance_km'];
 

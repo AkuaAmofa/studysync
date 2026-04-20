@@ -47,7 +47,7 @@ async function getNearbyGroups(req, res) {
 
     const [groups] = await pool.query(
       `SELECT g.*,
-              COUNT(m.user_id) AS member_count,
+              COUNT(m.member_id) AS member_count,
               (6371 * ACOS(
                 COS(RADIANS(?)) * COS(RADIANS(g.latitude)) *
                 COS(RADIANS(g.longitude) - RADIANS(?)) +
@@ -75,7 +75,7 @@ async function getGroupById(req, res) {
     const { id } = req.params;
 
     const [rows] = await pool.query(
-      `SELECT g.*, COUNT(m.user_id) AS member_count
+      `SELECT g.*, COUNT(m.member_id) AS member_count
        FROM ss_study_groups g
        LEFT JOIN ss_group_members m ON g.group_id = m.group_id
        WHERE g.group_id = ?

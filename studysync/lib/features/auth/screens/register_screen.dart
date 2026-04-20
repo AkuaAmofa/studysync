@@ -249,24 +249,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
                   children: List.generate(4, (i) {
                     final year = i + 1;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: ChoiceChip(
-                        label: Text('Year $year'),
-                        selected: _yearGroup == year,
-                        selectedColor: AppConstants.primaryColor,
-                        labelStyle: TextStyle(
-                          color: _yearGroup == year
-                              ? Colors.white
-                              : AppConstants.darkTextColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        onSelected: (_) =>
-                            setState(() => _yearGroup = year),
+                    return ChoiceChip(
+                      label: Text('Year $year'),
+                      selected: _yearGroup == year,
+                      selectedColor: AppConstants.primaryColor,
+                      labelStyle: TextStyle(
+                        color: _yearGroup == year
+                            ? Colors.white
+                            : AppConstants.darkTextColor,
+                        fontWeight: FontWeight.w500,
                       ),
+                      onSelected: (_) =>
+                          setState(() => _yearGroup = year),
                     );
                   }),
                 ),
