@@ -21,6 +21,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Map<String, dynamic>? _user;
   bool _isLoading = true;
 
+  // Stats (FIX 5)
+  int _groupsJoined = 0;
+  int _notesShared = 0;
+  int _sessionsThisWeek = 0;
+
   bool _pushNotifications = true;
   bool _shakeToFind = false;
   bool _stayAvailable = false;
@@ -36,6 +41,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     super.initState();
     _loadUser();
     _loadPrefs();
+    _loadStats();
   }
 
   @override
@@ -49,6 +55,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _loadUser() async {
     final user = await ref.read(authServiceProvider).getCurrentUser();
     if (mounted) setState(() { _user = user; _isLoading = false; });
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final stats = await ref.read(authServiceProvider).getStats();
+      if (mounted) {
+        setState(() {
+          _groupsJoined = (stats['groups_joined'] as num?)?.toInt() ?? 0;
+          _notesShared = (stats['notes_shared'] as num?)?.toInt() ?? 0;
+          _sessionsThisWeek = (stats['sessions_this_week'] as num?)?.toInt() ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadPrefs() async {
@@ -134,44 +153,78 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Edit profile',
-                style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                labelText: 'Full name',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+      builder: (ctx) {
+        bool saving = false;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) => Padding(
+            padding: EdgeInsets.fromLTRB(
+                16, 16, 16, MediaQuery.of(ctx).viewInsets.bottom + 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Edit profile',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: 'Full name',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) return;
+                          setSheetState(() => saving = true);
+                          try {
+                            await ref
+                                .read(authServiceProvider)
+                                .updateProfile(name: name);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            if (mounted) {
+                              setState(() {
+                                _user = {...?_user, 'name': name};
+                              });
+                              _snackbar('Profile updated!');
+                            }
+                          } catch (_) {
+                            setSheetState(() => saving = false);
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Failed to update profile.')),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppConstants.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save changes',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _snackbar('Profile updated!');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppConstants.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Save changes',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -294,7 +347,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 value: _darkMode,
                 onChanged: (v) {
                   setState(() => _darkMode = v);
-                  _snackbar('Dark mode coming soon');
+                  ref.read(themeProvider.notifier).state =
+                      v ? ThemeMode.dark : ThemeMode.light;
                 },
               ),
             ],
@@ -393,11 +447,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _statCard('0', 'Groups\njoined'),
+          _statCard('$_groupsJoined', 'Groups\njoined'),
           const SizedBox(width: 10),
-          _statCard('0', 'Notes\nshared'),
+          _statCard('$_notesShared', 'Notes\nshared'),
           const SizedBox(width: 10),
-          _statCard('0', 'Sessions\nthis week'),
+          _statCard('$_sessionsThisWeek', 'Sessions\nthis week'),
         ],
       ),
     );

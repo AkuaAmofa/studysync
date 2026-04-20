@@ -17,43 +17,39 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _courseController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
 
   int _maxSize = 6;
   String _duration = '2 hrs';
   bool _isLoading = false;
-  bool _locationReady = false;
   double? _lat;
   double? _lng;
 
   static const _durations = ['1 hr', '2 hrs', '3 hrs', 'Open-ended'];
-  static const _locationName = 'Ashesi University';
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _detectLocation();
+    _detectGps();
   }
 
   @override
   void dispose() {
     _courseController.dispose();
     _descriptionController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
-  // ── Location ──────────────────────────────────────────────────────────────
-
-  Future<void> _detectLocation() async {
-    final locationService = ref.read(locationServiceProvider);
-    final position = await locationService.getCurrentPosition();
+  // Silently grab GPS in background for lat/lng — user names the spot manually.
+  Future<void> _detectGps() async {
+    final position =
+        await ref.read(locationServiceProvider).getCurrentPosition();
     if (!mounted) return;
-    setState(() {
-      _lat = position?.latitude ?? 5.7602;
-      _lng = position?.longitude ?? -0.2168;
-      _locationReady = true;
-    });
+    _lat = position?.latitude ?? 5.7602;
+    _lng = position?.longitude ?? -0.2168;
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -68,7 +64,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         'description': _descriptionController.text.trim(),
         'latitude': _lat ?? 5.7602,
         'longitude': _lng ?? -0.2168,
-        'location_name': _locationName,
+        'location_name': _locationController.text.trim(),
         'max_size': _maxSize,
       });
       if (!mounted) return;
@@ -207,46 +203,21 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               const SizedBox(height: 12),
 
               // ── Location ─────────────────────────────────────────────────
-              _card(Row(
+              _card(Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on,
-                      color: AppConstants.primaryColor, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Location',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppConstants.darkTextColor,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _locationReady
-                              ? _locationName
-                              : 'Detecting location...',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: _locationReady
-                                ? Colors.black54
-                                : Colors.orange.shade700,
-                          ),
-                        ),
-                      ],
+                  _sectionLabel('Location on campus'),
+                  TextFormField(
+                    controller: _locationController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _fieldDecoration(
+                      label: 'Where are you studying?',
+                      hint: 'e.g. Big Ben, Library Room 2, The Grill',
                     ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter a campus location'
+                        : null,
                   ),
-                  if (!_locationReady)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppConstants.primaryColor),
-                    ),
                 ],
               )),
               const SizedBox(height: 12),

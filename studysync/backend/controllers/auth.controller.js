@@ -96,4 +96,48 @@ async function updateFcmToken(req, res) {
   }
 }
 
-module.exports = { register, login, updateFcmToken };
+async function getStats(req, res) {
+  try {
+    const userId = req.user.user_id;
+    const [groupsJoined] = await pool.query(
+      'SELECT COUNT(*) AS count FROM ss_group_members WHERE user_id = ?',
+      [userId]
+    );
+    const [notesShared] = await pool.query(
+      'SELECT COUNT(*) AS count FROM ss_group_notes WHERE uploaded_by = ?',
+      [userId]
+    );
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [sessionsThisWeek] = await pool.query(
+      'SELECT COUNT(*) AS count FROM ss_group_members WHERE user_id = ? AND joined_at >= ?',
+      [userId, oneWeekAgo]
+    );
+    return res.status(200).json({
+      groups_joined: groupsJoined[0].count,
+      notes_shared: notesShared[0].count,
+      sessions_this_week: sessionsThisWeek[0].count,
+    });
+  } catch (err) {
+    console.error('getStats error:', err);
+    return res.status(500).json({ error: 'Server error fetching stats' });
+  }
+}
+
+async function updateProfile(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    await pool.query(
+      'UPDATE ss_users SET name = ? WHERE user_id = ?',
+      [name.trim(), req.user.user_id]
+    );
+    return res.status(200).json({ message: 'Profile updated' });
+  } catch (err) {
+    console.error('updateProfile error:', err);
+    return res.status(500).json({ error: 'Server error updating profile' });
+  }
+}
+
+module.exports = { register, login, updateFcmToken, getStats, updateProfile };

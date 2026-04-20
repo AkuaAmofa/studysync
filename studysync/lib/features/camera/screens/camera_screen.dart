@@ -23,10 +23,31 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   final _captionController = TextEditingController();
   bool _isUploading = false;
 
+  // Group selector state (used when no groupId passed via route)
+  List<Map<String, dynamic>> _myGroups = [];
+  String? _selectedGroupId;
+  bool _loadingGroups = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.groupId == null) _loadMyGroups();
+  }
+
   @override
   void dispose() {
     _captionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMyGroups() async {
+    setState(() => _loadingGroups = true);
+    try {
+      final groups = await ref.read(groupServiceProvider).getMyGroups();
+      if (mounted) setState(() { _myGroups = groups; _loadingGroups = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loadingGroups = false);
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -45,12 +66,13 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       _snack('Take a photo first');
       return;
     }
-    if (widget.groupId == null) {
-      _snack('Please join a group first');
+    final targetGroupId = widget.groupId ?? _selectedGroupId;
+    if (targetGroupId == null) {
+      _snack('Select a group first');
       return;
     }
 
-    debugPrint('[CameraScreen] Sharing note to group: ${widget.groupId}');
+    debugPrint('[CameraScreen] Sharing note to group: $targetGroupId');
     setState(() => _isUploading = true);
     try {
       final bytes = await File(_selectedImage!.path).readAsBytes();
@@ -59,7 +81,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
       final groupService = ref.read(groupServiceProvider);
       await groupService.addNote(
-        groupId: widget.groupId!,
+        groupId: targetGroupId,
         imageBase64: base64Image,
         caption: _captionController.text.trim(),
       );
@@ -89,8 +111,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasGroup = widget.groupId != null;
-
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -100,9 +120,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => context.canPop() ? context.pop() : context.go('/camera'),
         ),
-        title: Text(
-          hasGroup ? 'Share to group' : 'Share a note',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: const Text(
+          'Share a note',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         elevation: 0,
       ),
@@ -171,6 +191,45 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // Group selector (only when not launched from a specific group)
+                if (widget.groupId == null) ...[
+                  _loadingGroups
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppConstants.primaryColor),
+                          ),
+                        )
+                      : DropdownButtonFormField<String>(
+                          initialValue: _selectedGroupId,
+                          decoration: InputDecoration(
+                            labelText: 'Select group',
+                            filled: true,
+                            fillColor: const Color(0xFFF5F5F7),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                          hint: const Text('Choose a group'),
+                          items: _myGroups.map((g) {
+                            return DropdownMenuItem<String>(
+                              value: g['group_id'] as String,
+                              child: Text(
+                                g['course_name'] as String? ?? 'Group',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (v) => setState(() => _selectedGroupId = v),
+                        ),
+                  const SizedBox(height: 12),
+                ],
 
                 // Caption field
                 TextField(

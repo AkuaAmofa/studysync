@@ -1,8 +1,11 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:studysync/services/auth_service.dart';
 import 'package:studysync/services/group_service.dart';
 import 'package:studysync/services/location_service.dart';
 import 'package:studysync/services/storage_service.dart';
+
+final themeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 

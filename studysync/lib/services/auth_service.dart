@@ -62,4 +62,30 @@ class AuthService {
     if (userJson == null) return null;
     return Map<String, dynamic>.from(jsonDecode(userJson) as Map);
   }
+
+  Future<Options> _authOptions() async {
+    final token = await getToken();
+    return Options(headers: {'Authorization': 'Bearer $token'});
+  }
+
+  Future<Map<String, dynamic>> getStats() async {
+    final response = await _dio.get('/auth/stats', options: await _authOptions());
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<void> updateProfile({required String name}) async {
+    final response = await _dio.patch(
+      '/auth/profile',
+      data: {'name': name},
+      options: await _authOptions(),
+    );
+    // Persist updated name in local storage.
+    final userJson = await _storage.read(key: 'user');
+    if (userJson != null) {
+      final user = Map<String, dynamic>.from(jsonDecode(userJson) as Map);
+      user['name'] = name;
+      await _storage.write(key: 'user', value: jsonEncode(user));
+    }
+    return response.data;
+  }
 }

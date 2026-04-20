@@ -15,7 +15,20 @@ class AppTheme {
         secondary: secondaryColor,
       ),
     );
+    return base.copyWith(
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(base.textTheme),
+    );
+  }
 
+  static ThemeData get darkTheme {
+    final base = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryColor,
+        secondary: secondaryColor,
+        brightness: Brightness.dark,
+      ),
+    );
     return base.copyWith(
       textTheme: GoogleFonts.plusJakartaSansTextTheme(base.textTheme),
     );
