@@ -36,14 +36,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text);
     });
+    // Show the map immediately with Ashesi fallback; GPS updates in background.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _init();
-      // Fetch groups immediately with Ashesi fallback, then again after
-      // GPS has had 2 seconds to lock in a real position.
-      _fetchGroups();
-      Timer(const Duration(seconds: 2), () {
-        if (mounted) _fetchGroups();
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = _ashesi;
+        _isLoading = false;
+        _rebuildMarkers();
       });
+      _mapController.move(_ashesi, 17.0);
+      _fetchGroups();
+      _initGps();
+      _refreshTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _fetchGroups(),
+      );
     });
   }
 
@@ -59,37 +66,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   static const _ashesi = LatLng(5.7602, -0.2168);
 
-  Future<void> _init() async {
-    debugPrint('[MapScreen] Starting location init...');
+  // Runs GPS in the background; updates position marker when a fix arrives.
+  Future<void> _initGps() async {
     final locationService = ref.read(locationServiceProvider);
     final position = await locationService.getCurrentPosition();
-    if (!mounted) return;
-
-    final latLng = position != null
-        ? LatLng(position.latitude, position.longitude)
-        : _ashesi;
-
-    debugPrint('[MapScreen] Using position: ${latLng.latitude}, ${latLng.longitude}');
-
-    // Set position and immediately draw the user pin — don't wait for groups.
+    if (!mounted || position == null) return;
+    final latLng = LatLng(position.latitude, position.longitude);
+    debugPrint('[MapScreen] GPS fix: ${latLng.latitude}, ${latLng.longitude}');
     setState(() {
       _currentPosition = latLng;
-      _isLoading = false;
       _rebuildMarkers();
     });
-
     _mapController.move(latLng, 17.0);
-    await _fetchGroups();
-
-    // If we got a real GPS fix, recenter once groups are loaded.
-    if (position != null && mounted) {
-      _mapController.move(latLng, 17.0);
-    }
-
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _fetchGroups(),
-    );
+    _fetchGroups();
   }
 
   Future<void> _fetchGroups() async {
@@ -494,10 +483,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         ElevatedButton(
                           onPressed: () {
                             setState(() {
-                              _isLoading = true;
                               _locationError = null;
                             });
-                            _init();
+                            _fetchGroups();
+                            _initGps();
                           },
                           style: ElevatedButton.styleFrom(
                               backgroundColor: AppConstants.primaryColor,
