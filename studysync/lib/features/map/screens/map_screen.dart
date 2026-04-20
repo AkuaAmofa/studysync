@@ -333,6 +333,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final memberCount = group['member_count'] ?? 1;
     final maxSize = group['max_size'] ?? '?';
     final distance = group['distance_km'];
+    final isMember = (group['is_member'] as num? ?? 0) != 0;
 
     return Card(
       elevation: 1,
@@ -416,12 +417,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: ElevatedButton(
-                    onPressed: groupId.isEmpty
+                    onPressed: isMember || groupId.isEmpty
                         ? null
                         : () => _joinGroup(groupId),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppConstants.secondaryColor,
-                      foregroundColor: Colors.white,
+                      backgroundColor: isMember
+                          ? Colors.grey.shade200
+                          : AppConstants.secondaryColor,
+                      foregroundColor: isMember
+                          ? Colors.black45
+                          : Colors.white,
+                      disabledBackgroundColor: Colors.grey.shade200,
+                      disabledForegroundColor: Colors.black45,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(
@@ -430,8 +437,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       elevation: 0,
                     ),
-                    child: const Text('Join',
-                        style: TextStyle(
+                    child: Text(isMember ? 'Joined' : 'Join',
+                        style: const TextStyle(
                             fontSize: 13, fontWeight: FontWeight.w600)),
                   ),
                 ),

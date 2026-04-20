@@ -70,6 +70,8 @@ async function getNearbyGroups(req, res) {
       return res.status(400).json({ error: 'lat and lng query params are required' });
     }
 
+    const user_id = req.user.user_id;
+
     const [groups] = await pool.query(
       `SELECT g.*,
               COUNT(m.member_id) AS member_count,
@@ -77,14 +79,18 @@ async function getNearbyGroups(req, res) {
                 COS(RADIANS(?)) * COS(RADIANS(g.latitude)) *
                 COS(RADIANS(g.longitude) - RADIANS(?)) +
                 SIN(RADIANS(?)) * SIN(RADIANS(g.latitude))
-              )) AS distance_km
+              )) AS distance_km,
+              EXISTS(
+                SELECT 1 FROM ss_group_members
+                WHERE group_id = g.group_id AND user_id = ?
+              ) AS is_member
        FROM ss_study_groups g
        LEFT JOIN ss_group_members m ON g.group_id = m.group_id
        WHERE g.status = 'active'
          AND (g.expires_at IS NULL OR g.expires_at > NOW())
        GROUP BY g.group_id
        ORDER BY g.created_at DESC`,
-      [lat, lng, lat]
+      [lat, lng, lat, user_id]
     );
 
     return res.status(200).json({ groups });
