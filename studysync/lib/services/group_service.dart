@@ -73,4 +73,25 @@ class GroupService {
     final raw = response.data['members'] as List;
     return raw.map((m) => Map<String, dynamic>.from(m as Map)).toList();
   }
+
+  Future<void> addNote({
+    required String groupId,
+    required String imageBase64,
+    required String caption,
+  }) async {
+    await _dio.post(
+      '/groups/$groupId/notes',
+      data: {'image_url': imageBase64, 'caption': caption},
+      options: await _authOptions(),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getNotes(String groupId) async {
+    final response = await _dio.get(
+      '/groups/$groupId/notes',
+      options: await _authOptions(),
+    );
+    final raw = response.data['notes'] as List;
+    return raw.map((n) => Map<String, dynamic>.from(n as Map)).toList();
+  }
 }

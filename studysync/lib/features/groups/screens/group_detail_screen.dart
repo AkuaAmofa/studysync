@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +18,7 @@ class GroupDetailScreen extends ConsumerStatefulWidget {
 class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   Map<String, dynamic>? _group;
   List<Map<String, dynamic>> _members = [];
+  List<Map<String, dynamic>> _notes = [];
   bool _isLoading = true;
   String? _error;
   bool _isLeaving = false;
@@ -34,12 +37,13 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
       final results = await Future.wait([
         gs.getGroupById(widget.groupId),
         gs.getGroupMembers(widget.groupId),
+        gs.getNotes(widget.groupId),
       ]);
       if (!mounted) return;
       setState(() {
         _group = results[0] as Map<String, dynamic>;
-        _members =
-            (results[1] as List).cast<Map<String, dynamic>>();
+        _members = (results[1] as List).cast<Map<String, dynamic>>();
+        _notes = (results[2] as List).cast<Map<String, dynamic>>();
         _isLoading = false;
       });
     } catch (e) {
@@ -348,22 +352,62 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
               color: AppConstants.darkTextColor),
         ),
         const SizedBox(height: 16),
-        Center(
-          child: Column(
-            children: [
-              Icon(Icons.note_outlined,
-                  size: 40, color: Colors.grey.shade300),
-              const SizedBox(height: 8),
-              const Text(
-                'No notes yet. Share one!',
-                style: TextStyle(color: Colors.black38, fontSize: 13),
-              ),
-            ],
+        if (_notes.isEmpty)
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.note_outlined,
+                    size: 40, color: Colors.grey.shade300),
+                const SizedBox(height: 8),
+                const Text(
+                  'No notes yet. Share one!',
+                  style: TextStyle(color: Colors.black38, fontSize: 13),
+                ),
+              ],
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _notes.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            itemBuilder: (_, i) => _buildNoteItem(_notes[i]),
           ),
-        ),
         const SizedBox(height: 4),
       ],
     ));
+  }
+
+  Widget _buildNoteItem(Map<String, dynamic> note) {
+    final caption = note['caption'] as String?;
+    final uploaderName = note['uploader_name'] as String? ?? 'Unknown';
+    final uploadedAt = note['uploaded_at'] as String?;
+    final imageData = note['image_url'] as String?;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (imageData != null && imageData.isNotEmpty)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.memory(
+              base64Decode(imageData),
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
+          ),
+        const SizedBox(height: 6),
+        if (caption != null && caption.isNotEmpty)
+          Text(caption,
+              style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        const SizedBox(height: 2),
+        Text(
+          '$uploaderName · ${_timeAgo(uploadedAt)}',
+          style: const TextStyle(fontSize: 11, color: Colors.black38),
+        ),
+      ],
+    );
   }
 
   Widget _card(Widget child) {

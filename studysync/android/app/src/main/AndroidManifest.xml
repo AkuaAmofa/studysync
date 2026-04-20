@@ -8,6 +8,9 @@
     <!-- Internet required for OpenStreetMap tiles -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Camera for note photos -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:label="studysync"
         android:name="${applicationName}"

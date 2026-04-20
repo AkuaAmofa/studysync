@@ -154,4 +154,49 @@ async function endGroup(req, res) {
   }
 }
 
-module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup };
+async function addNote(req, res) {
+  try {
+    const { id: group_id } = req.params;
+    const uploaded_by = req.user.user_id;
+    const { image_url, caption } = req.body;
+
+    if (!image_url) {
+      return res.status(400).json({ error: 'image_url is required' });
+    }
+
+    const note_id = uuidv4();
+    await pool.query(
+      `INSERT INTO ss_group_notes (note_id, group_id, uploaded_by, image_url, caption)
+       VALUES (?, ?, ?, ?, ?)`,
+      [note_id, group_id, uploaded_by, image_url, caption || null]
+    );
+
+    return res.status(201).json({ note_id });
+  } catch (err) {
+    console.error('addNote error:', err);
+    return res.status(500).json({ error: 'Server error saving note' });
+  }
+}
+
+async function getNotes(req, res) {
+  try {
+    const { id: group_id } = req.params;
+
+    const [notes] = await pool.query(
+      `SELECT n.note_id, n.image_url, n.caption, n.uploaded_at,
+              u.name AS uploader_name
+       FROM ss_group_notes n
+       JOIN ss_users u ON n.uploaded_by = u.user_id
+       WHERE n.group_id = ?
+       ORDER BY n.uploaded_at DESC`,
+      [group_id]
+    );
+
+    return res.status(200).json({ notes });
+  } catch (err) {
+    console.error('getNotes error:', err);
+    return res.status(500).json({ error: 'Server error fetching notes' });
+  }
+}
+
+module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup, addNote, getNotes };

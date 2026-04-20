@@ -132,7 +132,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/camera',
-                builder: (_, _) => const CameraScreen(),
+                builder: (_, state) {
+                  final groupId = state.uri.queryParameters['groupId'];
+                  return CameraScreen(groupId: groupId);
+                },
               ),
             ],
           ),
