@@ -8,6 +8,7 @@ import 'package:studysync/features/auth/screens/register_screen.dart';
 import 'package:studysync/features/camera/screens/camera_screen.dart';
 import 'package:studysync/features/groups/screens/create_group_screen.dart';
 import 'package:studysync/features/groups/screens/group_detail_screen.dart';
+import 'package:studysync/features/groups/screens/groups_screen.dart';
 import 'package:studysync/features/map/screens/map_screen.dart';
 import 'package:studysync/features/profile/screens/profile_screen.dart';
 import 'package:studysync/features/splash/screens/splash_screen.dart';
@@ -40,17 +41,6 @@ class _ShellScaffold extends StatelessWidget {
   }
 }
 
-class _GroupsListScreen extends StatelessWidget {
-  const _GroupsListScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Groups')),
-      body: const Center(child: Text('Groups list coming soon')),
-    );
-  }
-}
 
 // Routes that require authentication (shell routes).
 const _protectedPaths = ['/map', '/groups', '/camera', '/profile'];
@@ -124,7 +114,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/groups',
-                builder: (_, _) => const _GroupsListScreen(),
+                builder: (_, _) => const GroupsScreen(),
               ),
             ],
           ),

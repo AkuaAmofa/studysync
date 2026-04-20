@@ -91,6 +91,15 @@ class GroupService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getMyGroups() async {
+    final response = await _dio.get(
+      '/groups/my-groups',
+      options: await _authOptions(),
+    );
+    final raw = response.data['groups'] as List;
+    return raw.map((g) => Map<String, dynamic>.from(g as Map)).toList();
+  }
+
   Future<List<Map<String, dynamic>>> getNotes(String groupId) async {
     final response = await _dio.get(
       '/groups/$groupId/notes',

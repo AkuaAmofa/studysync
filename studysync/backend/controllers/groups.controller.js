@@ -154,6 +154,26 @@ async function endGroup(req, res) {
   }
 }
 
+async function getMyGroups(req, res) {
+  try {
+    const userId = req.user.user_id;
+    const [rows] = await pool.query(
+      `SELECT g.*, COUNT(m.member_id) AS member_count
+       FROM ss_study_groups g
+       JOIN ss_group_members m ON g.group_id = m.group_id
+       WHERE m.user_id = ? AND g.status = 'active'
+         AND (g.expires_at IS NULL OR g.expires_at > NOW())
+       GROUP BY g.group_id
+       ORDER BY g.created_at DESC`,
+      [userId]
+    );
+    return res.status(200).json({ groups: rows });
+  } catch (err) {
+    console.error('getMyGroups error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
 async function addNote(req, res) {
   try {
     const { id: group_id } = req.params;
@@ -199,4 +219,4 @@ async function getNotes(req, res) {
   }
 }
 
-module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup, addNote, getNotes };
+module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup, getMyGroups, addNote, getNotes };
