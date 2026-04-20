@@ -18,6 +18,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
   LatLng? _currentPosition;
   List<Map<String, dynamic>> _groups = [];
+  List<Map<String, dynamic>> _filteredGroups = [];
   List<Marker> _markers = [];
   String _selectedFilter = 'All';
   final _searchController = TextEditingController();
@@ -34,7 +35,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text);
+      setState(() {
+        _searchQuery = _searchController.text;
+        _applyFilter();
+      });
     });
     // Show the map immediately with Ashesi fallback; GPS updates in background.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -90,6 +94,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (mounted) {
         setState(() {
           _groups = groups;
+          _applyFilter();
           _rebuildMarkers();
         });
       }
@@ -138,9 +143,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   // ── Filtering ─────────────────────────────────────────────────────────────
 
-  List<Map<String, dynamic>> get _filteredGroups {
-    if (_selectedFilter == 'All' && _searchQuery.isEmpty) return _groups;
-    return _groups.where((g) {
+  void _applyFilter() {
+    if (_selectedFilter == 'All' && _searchQuery.isEmpty) {
+      _filteredGroups = List.of(_groups);
+      return;
+    }
+    _filteredGroups = _groups.where((g) {
       final course = (g['course_name'] as String? ?? '').toLowerCase();
       final matchesSearch =
           _searchQuery.isEmpty || course.contains(_searchQuery.toLowerCase());
@@ -216,7 +224,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: FilterChip(
                   label: Text(f),
                   selected: selected,
-                  onSelected: (_) => setState(() => _selectedFilter = f),
+                  onSelected: (_) => setState(() {
+                    _selectedFilter = f;
+                    _applyFilter();
+                  }),
                   selectedColor: AppConstants.primaryColor,
                   labelStyle: TextStyle(
                     color: selected
@@ -308,8 +319,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   )
                 : ListView.separated(
                     controller: scrollController,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding: EdgeInsets.fromLTRB(
+                      12,
+                      8,
+                      12,
+                      MediaQuery.of(context).padding.bottom + 8,
+                    ),
                     itemCount: groups.length,
                     separatorBuilder: (_, _) =>
                         const SizedBox(height: 8),
@@ -530,8 +545,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       initialChildSize: 0.35,
                       minChildSize: 0.1,
                       maxChildSize: 0.7,
-                      builder: (_, scrollController) =>
-                          _buildGroupList(scrollController),
+                      builder: (_, scrollController) => ClipRect(
+                        child: _buildGroupList(scrollController),
+                      ),
                     ),
                   ],
                 ),
