@@ -79,4 +79,21 @@ async function login(req, res) {
   }
 }
 
-module.exports = { register, login };
+async function updateFcmToken(req, res) {
+  try {
+    const { fcm_token } = req.body;
+    if (!fcm_token) {
+      return res.status(400).json({ error: 'fcm_token is required' });
+    }
+    await pool.query(
+      'UPDATE ss_users SET fcm_token = ? WHERE user_id = ?',
+      [fcm_token, req.user.user_id]
+    );
+    return res.status(200).json({ message: 'FCM token updated' });
+  } catch (err) {
+    console.error('updateFcmToken error:', err);
+    return res.status(500).json({ error: 'Server error updating FCM token' });
+  }
+}
+
+module.exports = { register, login, updateFcmToken };

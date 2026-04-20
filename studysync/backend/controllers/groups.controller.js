@@ -1,6 +1,16 @@
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/db');
 
+async function sendNotification(fcmToken, title, body) {
+  try {
+    const admin = require('firebase-admin');
+    if (!admin.apps.length) return;
+    await admin.messaging().send({ token: fcmToken, notification: { title, body } });
+  } catch (_) {
+    // Notification delivery is best-effort; never block the main request.
+  }
+}
+
 async function createGroup(req, res) {
   try {
     const { course_name, description, latitude, longitude, location_name, max_size } = req.body;
@@ -24,6 +34,21 @@ async function createGroup(req, res) {
       `INSERT INTO ss_group_members (member_id, group_id, user_id) VALUES (?, ?, ?)`,
       [uuidv4(), group_id, creator_id]
     );
+
+    // Warn creator 1 hour before the group expires (at the 23-hour mark).
+    setTimeout(async () => {
+      try {
+        const [userRows] = await pool.query(
+          'SELECT fcm_token FROM ss_users WHERE user_id = ?',
+          [creator_id]
+        );
+        const token = userRows[0]?.fcm_token;
+        if (token) {
+          await sendNotification(token, 'Group expiring soon',
+            `Your ${course_name} study group expires in 1 hour!`);
+        }
+      } catch (_) {}
+    }, 23 * 60 * 60 * 1000);
 
     const [rows] = await pool.query(
       'SELECT * FROM ss_study_groups WHERE group_id = ?',

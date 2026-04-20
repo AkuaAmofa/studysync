@@ -1,6 +1,14 @@
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/db');
 
+async function sendNotification(fcmToken, title, body) {
+  try {
+    const admin = require('firebase-admin');
+    if (!admin.apps.length) return;
+    await admin.messaging().send({ token: fcmToken, notification: { title, body } });
+  } catch (_) {}
+}
+
 async function joinGroup(req, res) {
   try {
     const { id: group_id } = req.params;
@@ -36,6 +44,24 @@ async function joinGroup(req, res) {
       'INSERT INTO ss_group_members (member_id, group_id, user_id) VALUES (?, ?, ?)',
       [uuidv4(), group_id, user_id]
     );
+
+    // Notify group creator (fire-and-forget).
+    (async () => {
+      try {
+        const [joinerRows] = await pool.query(
+          'SELECT name FROM ss_users WHERE user_id = ?', [user_id]);
+        const joinerName = joinerRows[0]?.name ?? 'Someone';
+        const [creatorRows] = await pool.query(
+          `SELECT u.fcm_token FROM ss_users u
+           JOIN ss_study_groups g ON g.creator_id = u.user_id
+           WHERE g.group_id = ?`, [group_id]);
+        const token = creatorRows[0]?.fcm_token;
+        if (token && group.creator_id !== user_id) {
+          await sendNotification(token, 'New member joined!',
+            `${joinerName} joined your ${group.course_name} group.`);
+        }
+      } catch (_) {}
+    })();
 
     return res.status(200).json({ message: 'Joined group successfully' });
   } catch (err) {
