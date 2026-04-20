@@ -11,7 +11,7 @@ async function createGroup(req, res) {
     }
 
     const group_id = uuidv4();
-    const expires_at = new Date(Date.now() + 4 * 60 * 60 * 1000);
+    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     await pool.query(
       `INSERT INTO ss_study_groups
@@ -56,10 +56,9 @@ async function getNearbyGroups(req, res) {
        FROM ss_study_groups g
        LEFT JOIN ss_group_members m ON g.group_id = m.group_id
        WHERE g.status = 'active'
-         AND g.expires_at > NOW()
+         AND (g.expires_at IS NULL OR g.expires_at > NOW())
        GROUP BY g.group_id
-       HAVING distance_km <= 10
-       ORDER BY distance_km ASC`,
+       ORDER BY g.created_at DESC`,
       [lat, lng, lat]
     );
 

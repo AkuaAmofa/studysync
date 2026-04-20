@@ -144,6 +144,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // ── Filtering ─────────────────────────────────────────────────────────────
 
   List<Map<String, dynamic>> get _filteredGroups {
+    if (_selectedFilter == 'All' && _searchQuery.isEmpty) return _groups;
     return _groups.where((g) {
       final course = (g['course_name'] as String? ?? '').toLowerCase();
       final matchesSearch =
@@ -156,12 +157,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   bool _chipMatches(String course, String filter) {
     return switch (filter) {
-      'CS' => course.contains('cs') || course.contains('computer'),
-      'Business' => course.contains('business'),
-      'MIS' =>
-        course.contains('mis') || course.contains('management information'),
-      'Engineering' => course.contains('engineering'),
-      _ => true,
+      'CS'          => course.contains('cs') || course.contains('computer'),
+      'Business'    => course.contains('bus') || course.contains('business'),
+      'MIS'         => course.contains('mis'),
+      'Engineering' => course.contains('eng'),
+      _             => true,
     };
   }
 
