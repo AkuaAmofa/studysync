@@ -13,7 +13,7 @@ async function sendNotification(fcmToken, title, body) {
 
 async function createGroup(req, res) {
   try {
-    const { course_name, description, latitude, longitude, location_name, max_size } = req.body;
+    const { course_name, description, latitude, longitude, location_name, max_size, category } = req.body;
     const creator_id = req.user.user_id;
 
     if (!course_name || latitude == null || longitude == null || !location_name || !max_size) {
@@ -25,9 +25,9 @@ async function createGroup(req, res) {
 
     await pool.query(
       `INSERT INTO ss_study_groups
-         (group_id, course_name, description, latitude, longitude, location_name, max_size, creator_id, expires_at, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [group_id, course_name, description || null, latitude, longitude, location_name, max_size, creator_id, expires_at]
+         (group_id, course_name, description, latitude, longitude, location_name, max_size, creator_id, expires_at, status, category)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+      [group_id, course_name, description || null, latitude, longitude, location_name, max_size, creator_id, expires_at, category || null]
     );
 
     await pool.query(
@@ -158,7 +158,7 @@ async function getMyGroups(req, res) {
   try {
     const userId = req.user.user_id;
     const [rows] = await pool.query(
-      `SELECT g.*, COUNT(m.member_id) AS member_count
+      `SELECT g.*, COUNT(DISTINCT m.member_id) AS member_count
        FROM ss_study_groups g
        JOIN ss_group_members m ON g.group_id = m.group_id
        WHERE m.user_id = ? AND g.status = 'active'

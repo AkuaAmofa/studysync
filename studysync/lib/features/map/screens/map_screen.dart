@@ -18,7 +18,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = MapController();
   LatLng? _currentPosition;
   List<Map<String, dynamic>> _groups = [];
-  List<Map<String, dynamic>> _filteredGroups = [];
+  final _filteredGroupsNotifier = ValueNotifier<List<Map<String, dynamic>>>([]);
   List<Marker> _markers = [];
   String _selectedFilter = 'All';
   final _searchController = TextEditingController();
@@ -40,11 +40,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _applyFilter();
       });
     });
-    // Show the map immediately with Ashesi fallback; GPS updates in background.
+    // Show map immediately centred on campus; GPS pin appears when fix arrives.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
-        _currentPosition = _ashesi;
         _isLoading = false;
         _rebuildMarkers();
       });
@@ -63,6 +62,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _refreshTimer?.cancel();
     _mapController.dispose();
     _searchController.dispose();
+    _filteredGroupsNotifier.dispose();
     super.dispose();
   }
 
@@ -144,24 +144,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // ── Filtering ─────────────────────────────────────────────────────────────
 
   void _applyFilter() {
+    final List<Map<String, dynamic>> result;
     if (_selectedFilter == 'All' && _searchQuery.isEmpty) {
-      _filteredGroups = List.of(_groups);
-      return;
+      result = List.of(_groups);
+    } else {
+      result = _groups.where((g) {
+        final course = (g['course_name'] as String? ?? '').toLowerCase();
+        final category = (g['category'] as String? ?? '');
+        final matchesSearch =
+            _searchQuery.isEmpty || course.contains(_searchQuery.toLowerCase());
+        final matchesChip =
+            _selectedFilter == 'All' || _chipMatches(course, category, _selectedFilter);
+        return matchesSearch && matchesChip;
+      }).toList();
     }
-    _filteredGroups = _groups.where((g) {
-      final course = (g['course_name'] as String? ?? '').toLowerCase();
-      final matchesSearch =
-          _searchQuery.isEmpty || course.contains(_searchQuery.toLowerCase());
-      final matchesChip =
-          _selectedFilter == 'All' || _chipMatches(course, _selectedFilter);
-      return matchesSearch && matchesChip;
-    }).toList();
+    _filteredGroupsNotifier.value = result;
   }
 
-  bool _chipMatches(String course, String filter) {
+  bool _chipMatches(String course, String category, String filter) {
+    // Prefer the explicit category field set at group creation time.
+    if (category.isNotEmpty) return category == filter;
+    // Fallback: guess from course name for older groups without a category.
     return switch (filter) {
       'CS'          => course.contains('cs') || course.contains('computer'),
-      'Business'    => course.contains('bus') || course.contains('business'),
+      'Business'    => course.contains('bus') || course.contains('ba') || course.contains('business'),
       'MIS'         => course.contains('mis'),
       'Engineering' => course.contains('eng'),
       _             => true,
@@ -254,8 +260,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  Widget _buildGroupList(ScrollController scrollController) {
-    final groups = _filteredGroups;
+  Widget _buildGroupList(List<Map<String, dynamic>> groups, ScrollController scrollController) {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -545,8 +550,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       initialChildSize: 0.35,
                       minChildSize: 0.1,
                       maxChildSize: 0.7,
-                      builder: (_, scrollController) => ClipRect(
-                        child: _buildGroupList(scrollController),
+                      builder: (_, scrollController) =>
+                          ValueListenableBuilder<List<Map<String, dynamic>>>(
+                        valueListenable: _filteredGroupsNotifier,
+                        builder: (context, groups, _) => ClipRect(
+                          child: _buildGroupList(groups, scrollController),
+                        ),
                       ),
                     ),
                   ],

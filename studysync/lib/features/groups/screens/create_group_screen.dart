@@ -21,11 +21,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
   int _maxSize = 6;
   String _duration = '2 hrs';
+  String? _selectedCategory;
   bool _isLoading = false;
   double? _lat;
   double? _lng;
 
   static const _durations = ['1 hr', '2 hrs', '3 hrs', 'Open-ended'];
+  static const _categories = ['CS', 'Business', 'MIS', 'Engineering', 'Other'];
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
         'longitude': _lng ?? -0.2168,
         'location_name': _locationController.text.trim(),
         'max_size': _maxSize,
+        'category': _selectedCategory,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -217,6 +220,27 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Enter a campus location'
                         : null,
+                  ),
+                ],
+              )),
+              const SizedBox(height: 12),
+
+              // ── Major / category ─────────────────────────────────────────
+              _card(Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionLabel('Major'),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedCategory,
+                    decoration: _fieldDecoration(label: 'Select your major'),
+                    hint: const Text('e.g. CS, Business…'),
+                    items: _categories.map((c) => DropdownMenuItem(
+                      value: c,
+                      child: Text(c),
+                    )).toList(),
+                    onChanged: (v) => setState(() => _selectedCategory = v),
+                    validator: (v) =>
+                        v == null ? 'Please select a major' : null,
                   ),
                 ],
               )),

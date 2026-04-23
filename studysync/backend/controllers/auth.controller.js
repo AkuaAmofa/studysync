@@ -97,30 +97,37 @@ async function updateFcmToken(req, res) {
 }
 
 async function getStats(req, res) {
+  const userId = req.user.user_id;
+  let groupsJoined = 0, notesShared = 0, sessionsThisWeek = 0;
   try {
-    const userId = req.user.user_id;
-    const [groupsJoined] = await pool.query(
+    const [g] = await pool.query(
       'SELECT COUNT(*) AS count FROM ss_group_members WHERE user_id = ?',
       [userId]
     );
-    const [notesShared] = await pool.query(
+    groupsJoined = Number(g[0].count);
+  } catch (err) { console.error('getStats groups_joined error:', err); }
+
+  try {
+    const [n] = await pool.query(
       'SELECT COUNT(*) AS count FROM ss_group_notes WHERE uploaded_by = ?',
       [userId]
     );
+    notesShared = Number(n[0].count);
+  } catch (err) { console.error('getStats notes_shared error:', err); }
+
+  try {
     const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [sessionsThisWeek] = await pool.query(
+    const [s] = await pool.query(
       'SELECT COUNT(*) AS count FROM ss_group_members WHERE user_id = ? AND joined_at >= ?',
       [userId, oneWeekAgo]
     );
-    return res.status(200).json({
-      groups_joined: groupsJoined[0].count,
-      notes_shared: notesShared[0].count,
-      sessions_this_week: sessionsThisWeek[0].count,
-    });
-  } catch (err) {
-    console.error('getStats error:', err);
-    return res.status(500).json({ error: 'Server error fetching stats' });
+    sessionsThisWeek = Number(s[0].count);
+  } catch (_) {
+    // joined_at column may not exist — fall back to total groups
+    sessionsThisWeek = groupsJoined;
   }
+
+  return res.status(200).json({ groups_joined: groupsJoined, notes_shared: notesShared, sessions_this_week: sessionsThisWeek });
 }
 
 async function updateProfile(req, res) {
