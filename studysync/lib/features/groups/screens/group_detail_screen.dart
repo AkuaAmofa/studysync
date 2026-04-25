@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -22,11 +23,28 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isLeaving = false;
+  bool _isExtending = false;
+  bool _isJoining = false;
+  String? _currentUserId;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
+    _initUser();
     _load();
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _loadSilent());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initUser() async {
+    final user = await ref.read(authServiceProvider).getCurrentUser();
+    if (mounted) setState(() => _currentUserId = user?['user_id'] as String?);
   }
 
   // ── Data ──────────────────────────────────────────────────────────────────
@@ -53,6 +71,62 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  // Silent refresh — updates data without showing the full loading spinner.
+  Future<void> _loadSilent() async {
+    try {
+      final gs = ref.read(groupServiceProvider);
+      final results = await Future.wait([
+        gs.getGroupById(widget.groupId),
+        gs.getGroupMembers(widget.groupId),
+        gs.getNotes(widget.groupId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _group = results[0] as Map<String, dynamic>;
+        _members = (results[1] as List).cast<Map<String, dynamic>>();
+        _notes = (results[2] as List).cast<Map<String, dynamic>>();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _joinGroup() async {
+    setState(() => _isJoining = true);
+    final success = await ref.read(groupServiceProvider).joinGroup(widget.groupId);
+    if (!mounted) return;
+    setState(() => _isJoining = false);
+    if (success) {
+      await _loadSilent();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Joined!'), backgroundColor: AppConstants.secondaryColor),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not join group.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _extendGroup() async {
+    setState(() => _isExtending = true);
+    try {
+      await ref.read(groupServiceProvider).extendGroup(widget.groupId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group extended by 24 hours!'), backgroundColor: AppConstants.secondaryColor),
+        );
+        await _loadSilent();
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not extend group.')));
+    } finally {
+      if (mounted) setState(() => _isExtending = false);
     }
   }
 
@@ -105,6 +179,14 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
     Color(0xFF9C27B0),
   ];
 
+  // ── Derived state ─────────────────────────────────────────────────────────
+
+  bool get _isMember => _currentUserId != null &&
+      _members.any((m) => m['user_id'] == _currentUserId);
+
+  bool get _isCreator => _currentUserId != null &&
+      _group?['creator_id'] == _currentUserId;
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -128,14 +210,15 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
         ),
         elevation: 0,
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppConstants.primaryColor,
-        foregroundColor: Colors.white,
-        tooltip: 'Share a note',
-        onPressed: () =>
-            context.push('/camera?groupId=${widget.groupId}'),
-        child: const Icon(Icons.camera_alt),
-      ),
+      floatingActionButton: _isMember
+          ? FloatingActionButton(
+              backgroundColor: AppConstants.primaryColor,
+              foregroundColor: Colors.white,
+              tooltip: 'Share a note',
+              onPressed: () => context.push('/camera?groupId=${widget.groupId}'),
+              child: const Icon(Icons.camera_alt),
+            )
+          : null,
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(
@@ -297,45 +380,81 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
   }
 
   Widget _buildActionButtons() {
-    return Row(
+    if (!_isMember) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _isJoining ? null : _joinGroup,
+          icon: _isJoining
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.group_add, size: 18),
+          label: const Text('Join group'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppConstants.secondaryColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+          ),
+        ),
+      );
+    }
+
+    return Column(
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _isLeaving ? null : _leaveGroup,
-            icon: _isLeaving
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Color(0xFFE24B4A)))
-                : const Icon(Icons.exit_to_app, size: 18),
-            label: const Text('Leave group'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFFE24B4A),
-              side: const BorderSide(color: Color(0xFFE24B4A)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isLeaving ? null : _leaveGroup,
+                icon: _isLeaving
+                    ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE24B4A)))
+                    : const Icon(Icons.exit_to_app, size: 18),
+                label: const Text('Leave group'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFE24B4A),
+                  side: const BorderSide(color: Color(0xFFE24B4A)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => context.push('/camera?groupId=${widget.groupId}'),
+                icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                label: const Text('Share note'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppConstants.secondaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_isCreator) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isExtending ? null : _extendGroup,
+              icon: _isExtending
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppConstants.primaryColor))
+                  : const Icon(Icons.timer_outlined, size: 18),
+              label: const Text('Extend by 24 hours'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppConstants.primaryColor,
+                side: const BorderSide(color: AppConstants.primaryColor),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () =>
-                context.push('/camera?groupId=${widget.groupId}'),
-            icon: const Icon(Icons.camera_alt_outlined, size: 18),
-            label: const Text('Share note'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppConstants.secondaryColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-          ),
-        ),
+        ],
       ],
     );
   }

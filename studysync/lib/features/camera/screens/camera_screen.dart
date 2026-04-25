@@ -194,40 +194,71 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
 
                 // Group selector (only when not launched from a specific group)
                 if (widget.groupId == null) ...[
-                  _loadingGroups
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppConstants.primaryColor),
-                          ),
-                        )
-                      : DropdownButtonFormField<String>(
-                          initialValue: _selectedGroupId,
-                          decoration: InputDecoration(
-                            labelText: 'Select group',
-                            filled: true,
-                            fillColor: const Color(0xFFF5F5F7),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
+                  if (_loadingGroups)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppConstants.primaryColor),
+                      ),
+                    )
+                  else if (_myGroups.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade700, size: 20),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              "You're not in any active groups yet.",
+                              style: TextStyle(fontSize: 13, color: Colors.black87),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
                           ),
-                          hint: const Text('Choose a group'),
-                          items: _myGroups.map((g) {
-                            return DropdownMenuItem<String>(
-                              value: g['group_id'] as String,
-                              child: Text(
-                                g['course_name'] as String? ?? 'Group',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (v) => setState(() => _selectedGroupId = v),
+                          TextButton(
+                            onPressed: () => context.go('/map'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppConstants.primaryColor,
+                              padding: EdgeInsets.zero,
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Find one', style: TextStyle(fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedGroupId,
+                      decoration: InputDecoration(
+                        labelText: 'Select group',
+                        filled: true,
+                        fillColor: const Color(0xFFF5F5F7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                      ),
+                      hint: const Text('Choose a group'),
+                      items: _myGroups.map((g) {
+                        return DropdownMenuItem<String>(
+                          value: g['group_id'] as String,
+                          child: Text(
+                            g['course_name'] as String? ?? 'Group',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (v) => setState(() => _selectedGroupId = v),
+                    ),
                   const SizedBox(height: 12),
                 ],
 

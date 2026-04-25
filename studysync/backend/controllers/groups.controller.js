@@ -64,13 +64,14 @@ async function createGroup(req, res) {
 
 async function getNearbyGroups(req, res) {
   try {
-    const { lat, lng } = req.query;
+    const { lat, lng, radius } = req.query;
 
     if (lat == null || lng == null) {
       return res.status(400).json({ error: 'lat and lng query params are required' });
     }
 
     const user_id = req.user.user_id;
+    const radiusKm = parseFloat(radius) || 5.0;
 
     const [groups] = await pool.query(
       `SELECT g.*,
@@ -89,8 +90,9 @@ async function getNearbyGroups(req, res) {
        WHERE g.status = 'active'
          AND (g.expires_at IS NULL OR g.expires_at > NOW())
        GROUP BY g.group_id
-       ORDER BY g.created_at DESC`,
-      [lat, lng, lat, user_id]
+       HAVING distance_km <= ?
+       ORDER BY distance_km ASC`,
+      [lat, lng, lat, user_id, radiusKm]
     );
 
     return res.status(200).json({ groups });
@@ -158,10 +160,11 @@ async function getMyGroups(req, res) {
   try {
     const userId = req.user.user_id;
     const [rows] = await pool.query(
-      `SELECT g.*, COUNT(DISTINCT m.member_id) AS member_count
+      `SELECT g.*,
+              (SELECT COUNT(DISTINCT m2.member_id) FROM ss_group_members m2 WHERE m2.group_id = g.group_id) AS member_count
        FROM ss_study_groups g
-       JOIN ss_group_members m ON g.group_id = m.group_id
-       WHERE m.user_id = ? AND g.status = 'active'
+       JOIN ss_group_members m ON g.group_id = m.group_id AND m.user_id = ?
+       WHERE g.status = 'active'
          AND (g.expires_at IS NULL OR g.expires_at > NOW())
        GROUP BY g.group_id
        ORDER BY g.created_at DESC`,
@@ -171,6 +174,29 @@ async function getMyGroups(req, res) {
   } catch (err) {
     console.error('getMyGroups error:', err);
     return res.status(500).json({ error: err.message });
+  }
+}
+
+async function extendGroup(req, res) {
+  try {
+    const { id } = req.params;
+    const user_id = req.user.user_id;
+
+    const [rows] = await pool.query(
+      'SELECT creator_id, course_name, expires_at FROM ss_study_groups WHERE group_id = ? AND status = ?',
+      [id, 'active']
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Group not found or not active' });
+    if (rows[0].creator_id !== user_id) return res.status(403).json({ error: 'Only the creator can extend this group' });
+
+    const current = rows[0].expires_at ? new Date(rows[0].expires_at) : new Date();
+    const newExpiry = new Date(Math.max(current.getTime(), Date.now()) + 24 * 60 * 60 * 1000);
+
+    await pool.query('UPDATE ss_study_groups SET expires_at = ? WHERE group_id = ?', [newExpiry, id]);
+    return res.status(200).json({ message: 'Group extended by 24 hours', expires_at: newExpiry });
+  } catch (err) {
+    console.error('extendGroup error:', err);
+    return res.status(500).json({ error: 'Server error extending group' });
   }
 }
 
@@ -190,6 +216,25 @@ async function addNote(req, res) {
        VALUES (?, ?, ?, ?, ?)`,
       [note_id, group_id, uploaded_by, image_url, caption || null]
     );
+
+    // Notify all other group members (fire-and-forget).
+    (async () => {
+      try {
+        const [uploaderRows] = await pool.query('SELECT name FROM ss_users WHERE user_id = ?', [uploaded_by]);
+        const uploaderName = uploaderRows[0]?.name ?? 'Someone';
+        const [groupRows] = await pool.query('SELECT course_name FROM ss_study_groups WHERE group_id = ?', [group_id]);
+        const courseName = groupRows[0]?.course_name ?? 'your group';
+        const [members] = await pool.query(
+          `SELECT u.fcm_token FROM ss_group_members m
+           JOIN ss_users u ON m.user_id = u.user_id
+           WHERE m.group_id = ? AND m.user_id != ? AND u.fcm_token IS NOT NULL`,
+          [group_id, uploaded_by]
+        );
+        for (const { fcm_token } of members) {
+          if (fcm_token) await sendNotification(fcm_token, 'New note shared!', `${uploaderName} shared a note in ${courseName}`);
+        }
+      } catch (_) {}
+    })();
 
     return res.status(201).json({ note_id });
   } catch (err) {
@@ -219,4 +264,4 @@ async function getNotes(req, res) {
   }
 }
 
-module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup, getMyGroups, addNote, getNotes };
+module.exports = { createGroup, getNearbyGroups, getGroupById, endGroup, getMyGroups, extendGroup, addNote, getNotes };

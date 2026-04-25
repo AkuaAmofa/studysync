@@ -73,6 +73,17 @@ class AuthService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.patch(
+      '/auth/password',
+      data: {'current_password': currentPassword, 'new_password': newPassword},
+      options: await _authOptions(),
+    );
+  }
+
   Future<void> updateProfile({required String name}) async {
     final response = await _dio.patch(
       '/auth/profile',

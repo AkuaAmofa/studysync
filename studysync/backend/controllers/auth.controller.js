@@ -147,4 +147,26 @@ async function updateProfile(req, res) {
   }
 }
 
-module.exports = { register, login, updateFcmToken, getStats, updateProfile };
+async function changePassword(req, res) {
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'current_password and new_password are required' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+    const [rows] = await pool.query('SELECT password_hash FROM ss_users WHERE user_id = ?', [req.user.user_id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const valid = await bcrypt.compare(current_password, rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+    const hash = await bcrypt.hash(new_password, 10);
+    await pool.query('UPDATE ss_users SET password_hash = ? WHERE user_id = ?', [hash, req.user.user_id]);
+    return res.status(200).json({ message: 'Password updated' });
+  } catch (err) {
+    console.error('changePassword error:', err);
+    return res.status(500).json({ error: 'Server error changing password' });
+  }
+}
+
+module.exports = { register, login, updateFcmToken, getStats, updateProfile, changePassword };

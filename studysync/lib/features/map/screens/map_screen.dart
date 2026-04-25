@@ -23,6 +23,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String _selectedFilter = 'All';
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  double _radiusKm = 5.0;
   bool _isLoading = true;
   String? _locationError;
   Timer? _refreshTimer;
@@ -51,7 +52,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _fetchGroups();
       _initGps();
       _refreshTimer = Timer.periodic(
-        const Duration(seconds: 30),
+        const Duration(seconds: 10),
         (_) => _fetchGroups(),
       );
     });
@@ -90,7 +91,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final lng = _currentPosition?.longitude ?? _ashesi.longitude;
     try {
       final groupService = ref.read(groupServiceProvider);
-      final groups = await groupService.getNearbyGroups(lat, lng);
+      final groups = await groupService.getNearbyGroups(lat, lng, radiusKm: _radiusKm);
       if (mounted) {
         setState(() {
           _groups = groups;
@@ -219,7 +220,45 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))],
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.radar, size: 16, color: AppConstants.primaryColor),
+              const SizedBox(width: 6),
+              Text(
+                'Within ${_radiusKm.toStringAsFixed(1)} km',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppConstants.darkTextColor),
+              ),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  ),
+                  child: Slider(
+                    value: _radiusKm,
+                    min: 0.5,
+                    max: 10.0,
+                    divisions: 19,
+                    activeColor: AppConstants.primaryColor,
+                    inactiveColor: Colors.grey.shade200,
+                    onChanged: (v) => setState(() => _radiusKm = v),
+                    onChangeEnd: (_) => _fetchGroups(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(

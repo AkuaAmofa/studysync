@@ -15,10 +15,10 @@ class GroupService {
   }
 
   Future<List<Map<String, dynamic>>> getNearbyGroups(
-      double lat, double lng) async {
+      double lat, double lng, {double radiusKm = 5.0}) async {
     final response = await _dio.get(
       '/groups/nearby',
-      queryParameters: {'lat': lat, 'lng': lng},
+      queryParameters: {'lat': lat, 'lng': lng, 'radius': radiusKm},
       options: await _authOptions(),
     );
     final raw = response.data['groups'] as List;
@@ -63,6 +63,10 @@ class GroupService {
 
   Future<void> endGroup(String groupId) async {
     await _dio.patch('/groups/$groupId/end', options: await _authOptions());
+  }
+
+  Future<void> extendGroup(String groupId) async {
+    await _dio.patch('/groups/$groupId/extend', options: await _authOptions());
   }
 
   Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
