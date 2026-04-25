@@ -42,14 +42,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _applyFilter();
       });
     });
-    // Show map immediately centred on campus; GPS pin appears when fix arrives.
+    // Show map immediately; groups + GPS run after first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _rebuildMarkers();
       });
-      _mapController.move(_ashesi, 17.0);
       _fetchGroups();
       _initGps();
       _refreshTimer = Timer.periodic(
@@ -72,25 +71,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   static const _ashesi = LatLng(5.7602, -0.2168);
 
+  void _safeMove(LatLng pos) {
+    try { _mapController.move(pos, 17.0); } catch (_) {}
+  }
+
   // Shows last-known position instantly, then refines with a real GPS fix.
   Future<void> _initGps() async {
     final locationService = ref.read(locationServiceProvider);
 
-    // Step 1: instant pin from cached position (no GPS radio needed).
+    // Step 1: instant pin + fetch from cached position (no GPS radio needed).
     final last = await Geolocator.getLastKnownPosition();
     if (mounted && last != null) {
       final latLng = LatLng(last.latitude, last.longitude);
       setState(() { _currentPosition = latLng; _rebuildMarkers(); });
-      _mapController.move(latLng, 17.0);
+      _safeMove(latLng);
+      _fetchGroups(); // re-fetch from real coords immediately
     }
 
     // Step 2: accurate fix in background.
     final position = await locationService.getCurrentPosition();
-    if (!mounted || position == null) return;
+    if (!mounted) return;
+    if (position == null) {
+      // Accurate GPS failed — if we already have a position from step 1,
+      // groups were already fetched. Nothing more to do.
+      return;
+    }
     final latLng = LatLng(position.latitude, position.longitude);
     debugPrint('[MapScreen] GPS fix: ${latLng.latitude}, ${latLng.longitude}');
     setState(() { _currentPosition = latLng; _rebuildMarkers(); });
-    _mapController.move(latLng, 17.0);
+    _safeMove(latLng);
     _fetchGroups();
   }
 
