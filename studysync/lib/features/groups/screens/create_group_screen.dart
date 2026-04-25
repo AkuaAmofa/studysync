@@ -47,14 +47,17 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   }
 
   Future<void> _detectGps() async {
+    debugPrint('[CreateGroup] Starting GPS...');
     final position =
         await ref.read(locationServiceProvider).getCurrentPosition();
+    debugPrint('[CreateGroup] GPS result: $position');
     if (!mounted) return;
     setState(() {
       _lat = position?.latitude ?? 5.7602;
       _lng = position?.longitude ?? -0.2168;
       _gpsReady = position != null;
     });
+    debugPrint('[CreateGroup] Coords: $_lat, $_lng | ready: $_gpsReady');
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -160,6 +163,26 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           'New study group',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _gpsReady
+                ? const Tooltip(
+                    message: 'Location ready',
+                    child: Icon(Icons.location_on,
+                        color: Color(0xFF1D9E75), size: 20),
+                  )
+                : const Tooltip(
+                    message: 'Getting location…',
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.black38),
+                    ),
+                  ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Form(
