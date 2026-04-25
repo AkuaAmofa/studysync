@@ -122,6 +122,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  // MySQL DECIMAL columns arrive as Strings via mysql2 → JSON → Dio.
+  static double? _d(dynamic v) =>
+      v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '');
+  static int _i(dynamic v, int fallback) =>
+      v is num ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? fallback;
+  static bool _isMember(dynamic v) =>
+      v is num ? v != 0 : v?.toString() == '1';
+
   void _rebuildMarkers() {
     final markers = <Marker>[];
 
@@ -139,12 +147,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     for (final group in _groups) {
-      final lat = (group['latitude'] as num?)?.toDouble();
-      final lng = (group['longitude'] as num?)?.toDouble();
+      final lat = _d(group['latitude']);
+      final lng = _d(group['longitude']);
       if (lat == null || lng == null) continue;
       final course = group['course_name'] as String? ?? '';
-      final memberCount = group['member_count'] ?? 1;
-      final maxSize = group['max_size'] ?? '?';
+      final memberCount = _i(group['member_count'], 1);
+      final maxSize = _i(group['max_size'], 0);
       markers.add(Marker(
         point: LatLng(lat, lng),
         width: 44,
@@ -402,10 +410,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final groupId = group['group_id'] as String? ?? '';
     final course = group['course_name'] as String? ?? '';
     final locationName = group['location_name'] as String? ?? '';
-    final memberCount = group['member_count'] ?? 1;
-    final maxSize = group['max_size'] ?? '?';
-    final distance = group['distance_km'];
-    final isMember = (group['is_member'] as num? ?? 0) != 0;
+    final memberCount = _i(group['member_count'], 1);
+    final maxSize = _i(group['max_size'], 0);
+    final distance = _d(group['distance_km']);
+    final isMember = _isMember(group['is_member']);
 
     return Card(
       elevation: 1,
@@ -474,7 +482,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           if (distance != null) ...[
                             const SizedBox(width: 6),
                             Text(
-                              '${(distance as num).toStringAsFixed(1)} km',
+                              '${distance.toStringAsFixed(1)} km',
                               style: const TextStyle(
                                   fontSize: 11, color: Colors.black38),
                             ),
