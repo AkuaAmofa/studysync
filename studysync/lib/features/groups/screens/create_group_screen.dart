@@ -23,6 +23,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   String _duration = '2 hrs';
   String? _selectedCategory;
   bool _isLoading = false;
+  bool _gpsReady = false;
   double? _lat;
   double? _lng;
 
@@ -45,13 +46,15 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     super.dispose();
   }
 
-  // Silently grab GPS in background for lat/lng — user names the spot manually.
   Future<void> _detectGps() async {
     final position =
         await ref.read(locationServiceProvider).getCurrentPosition();
     if (!mounted) return;
-    _lat = position?.latitude ?? 5.7602;
-    _lng = position?.longitude ?? -0.2168;
+    setState(() {
+      _lat = position?.latitude ?? 5.7602;
+      _lng = position?.longitude ?? -0.2168;
+      _gpsReady = position != null;
+    });
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -326,11 +329,32 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               )),
               const SizedBox(height: 28),
 
+              // ── GPS status ────────────────────────────────────────────────
+              if (!_gpsReady)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      SizedBox(
+                        width: 12, height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.black38),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Getting your location…',
+                        style: TextStyle(fontSize: 12, color: Colors.black45),
+                      ),
+                    ],
+                  ),
+                ),
+
               // ── Submit button ─────────────────────────────────────────────
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
+                  onPressed: (_isLoading || !_gpsReady) ? null : _submit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppConstants.primaryColor,
                     foregroundColor: Colors.white,

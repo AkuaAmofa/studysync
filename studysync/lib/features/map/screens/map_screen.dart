@@ -108,12 +108,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final lng = _currentPosition?.longitude ?? _ashesi.longitude;
     try {
       final groupService = ref.read(groupServiceProvider);
-      final all = await groupService.getNearbyGroups(lat, lng);
-      // Filter by radius on the client — avoids MySQL HAVING alias issues.
-      final groups = all.where((g) {
-        final dist = (g['distance_km'] as num?)?.toDouble();
-        return dist == null || dist <= _radiusKm;
-      }).toList();
+      final groups = await groupService.getNearbyGroups(lat, lng);
+      debugPrint('[MapScreen] fetched ${groups.length} groups from ($lat, $lng)');
       if (mounted) {
         setState(() {
           _groups = groups;
