@@ -77,9 +77,11 @@ async function getNearbyGroups(req, res) {
       `SELECT g.*,
               COUNT(DISTINCT m.member_id) AS member_count,
               (6371 * ACOS(
-                COS(RADIANS(?)) * COS(RADIANS(g.latitude)) *
-                COS(RADIANS(g.longitude) - RADIANS(?)) +
-                SIN(RADIANS(?)) * SIN(RADIANS(g.latitude))
+                LEAST(1.0, GREATEST(-1.0,
+                  COS(RADIANS(?)) * COS(RADIANS(g.latitude)) *
+                  COS(RADIANS(g.longitude) - RADIANS(?)) +
+                  SIN(RADIANS(?)) * SIN(RADIANS(g.latitude))
+                ))
               )) AS distance_km,
               EXISTS(
                 SELECT 1 FROM ss_group_members
@@ -90,9 +92,8 @@ async function getNearbyGroups(req, res) {
        WHERE g.status = 'active'
          AND (g.expires_at IS NULL OR g.expires_at > NOW())
        GROUP BY g.group_id
-       HAVING distance_km <= ?
-       ORDER BY distance_km ASC`,
-      [lat, lng, lat, user_id, radiusKm]
+       ORDER BY g.created_at DESC`,
+      [lat, lng, lat, user_id]
     );
 
     return res.status(200).json({ groups });

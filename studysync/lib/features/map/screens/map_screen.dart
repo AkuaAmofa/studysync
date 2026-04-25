@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:studysync/core/constants/app_constants.dart';
@@ -71,17 +72,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   static const _ashesi = LatLng(5.7602, -0.2168);
 
-  // Runs GPS in the background; updates position marker when a fix arrives.
+  // Shows last-known position instantly, then refines with a real GPS fix.
   Future<void> _initGps() async {
     final locationService = ref.read(locationServiceProvider);
+
+    // Step 1: instant pin from cached position (no GPS radio needed).
+    final last = await Geolocator.getLastKnownPosition();
+    if (mounted && last != null) {
+      final latLng = LatLng(last.latitude, last.longitude);
+      setState(() { _currentPosition = latLng; _rebuildMarkers(); });
+      _mapController.move(latLng, 17.0);
+    }
+
+    // Step 2: accurate fix in background.
     final position = await locationService.getCurrentPosition();
     if (!mounted || position == null) return;
     final latLng = LatLng(position.latitude, position.longitude);
     debugPrint('[MapScreen] GPS fix: ${latLng.latitude}, ${latLng.longitude}');
-    setState(() {
-      _currentPosition = latLng;
-      _rebuildMarkers();
-    });
+    setState(() { _currentPosition = latLng; _rebuildMarkers(); });
     _mapController.move(latLng, 17.0);
     _fetchGroups();
   }
@@ -91,7 +99,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final lng = _currentPosition?.longitude ?? _ashesi.longitude;
     try {
       final groupService = ref.read(groupServiceProvider);
-      final groups = await groupService.getNearbyGroups(lat, lng, radiusKm: _radiusKm);
+      final all = await groupService.getNearbyGroups(lat, lng);
+      // Filter by radius on the client — avoids MySQL HAVING alias issues.
+      final groups = all.where((g) {
+        final dist = (g['distance_km'] as num?)?.toDouble();
+        return dist == null || dist <= _radiusKm;
+      }).toList();
       if (mounted) {
         setState(() {
           _groups = groups;
@@ -99,8 +112,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _rebuildMarkers();
         });
       }
-    } catch (_) {
-      // Silently swallow refresh errors — stale data is acceptable.
+    } catch (e) {
+      debugPrint('[MapScreen] _fetchGroups error: $e');
     }
   }
 
