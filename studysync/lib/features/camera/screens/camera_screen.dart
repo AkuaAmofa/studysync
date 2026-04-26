@@ -32,6 +32,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
   void initState() {
     super.initState();
     if (widget.groupId == null) _loadMyGroups();
+    _retrieveLostData();
   }
 
   @override
@@ -47,6 +48,16 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
       if (mounted) setState(() { _myGroups = groups; _loadingGroups = false; });
     } catch (_) {
       if (mounted) setState(() => _loadingGroups = false);
+    }
+  }
+
+  // Recovers the image if Android killed the activity while the camera was open.
+  Future<void> _retrieveLostData() async {
+    final picker = ImagePicker();
+    final response = await picker.retrieveLostData();
+    if (response.isEmpty || !mounted) return;
+    if (response.file != null) {
+      setState(() => _selectedImage = response.file);
     }
   }
 
