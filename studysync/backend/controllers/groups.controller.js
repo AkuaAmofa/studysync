@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/db');
+const { sendSms } = require('../utils/sms');
 
 async function sendNotification(fcmToken, title, body) {
   try {
@@ -54,6 +55,20 @@ async function createGroup(req, res) {
       'SELECT * FROM ss_study_groups WHERE group_id = ?',
       [group_id]
     );
+
+    // Send SMS confirmation to creator (fire-and-forget).
+    (async () => {
+      try {
+        const [userRows] = await pool.query(
+          'SELECT phone_number FROM ss_users WHERE user_id = ?', [creator_id]
+        );
+        const phone = userRows[0]?.phone_number;
+        if (phone) {
+          await sendSms(phone,
+            `StudySync: You created the group '${course_name}'. Good luck studying!`);
+        }
+      } catch (_) {}
+    })();
 
     return res.status(201).json({ group: rows[0] });
   } catch (err) {

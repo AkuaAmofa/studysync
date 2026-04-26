@@ -105,28 +105,12 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           const SnackBar(content: Text('Joined!'), backgroundColor: AppConstants.secondaryColor),
         );
       }
-      _sendSmsConfirmation(_group?['course_name'] as String? ?? 'the group');
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not join group.')),
         );
       }
-    }
-  }
-
-  Future<void> _sendSmsConfirmation(String courseName) async {
-    final user = await ref.read(authServiceProvider).getCurrentUser();
-    final phone = user?['phone_number'] as String?;
-    if (phone == null || phone.isEmpty) return;
-    final message = "StudySync: You joined '$courseName'. See you there!";
-    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message});
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open SMS app.')),
-      );
     }
   }
 
