@@ -1,6 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
 const pool = require('../config/db');
-const { sendSms } = require('../utils/sms');
 
 async function sendNotification(fcmToken, title, body) {
   try {
@@ -60,20 +59,6 @@ async function joinGroup(req, res) {
         if (token && group.creator_id !== user_id) {
           await sendNotification(token, 'New member joined!',
             `${joinerName} joined your ${group.course_name} group.`);
-        }
-      } catch (_) {}
-    })();
-
-    // Send SMS confirmation to the user who just joined (fire-and-forget).
-    (async () => {
-      try {
-        const [userRows] = await pool.query(
-          'SELECT phone_number FROM ss_users WHERE user_id = ?', [user_id]
-        );
-        const phone = userRows[0]?.phone_number;
-        if (phone) {
-          await sendSms(phone,
-            `StudySync: You joined '${group.course_name}'. See you there!`);
         }
       } catch (_) {}
     })();
