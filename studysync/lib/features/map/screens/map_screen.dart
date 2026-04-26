@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:studysync/core/constants/app_constants.dart';
 import 'package:studysync/core/providers/app_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -211,7 +212,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  Future<void> _joinGroup(String groupId) async {
+  Future<void> _joinGroup(String groupId, String courseName) async {
     final groupService = ref.read(groupServiceProvider);
     final success = await groupService.joinGroup(groupId);
     if (!mounted) return;
@@ -222,7 +223,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             success ? AppConstants.secondaryColor : Colors.redAccent,
       ),
     );
-    if (success) _fetchGroups();
+    if (success) {
+      _fetchGroups();
+      _sendSmsConfirmation(courseName);
+    }
+  }
+
+  Future<void> _sendSmsConfirmation(String courseName) async {
+    final user = await ref.read(authServiceProvider).getCurrentUser();
+    final phone = user?['phone_number'] as String?;
+    if (phone == null || phone.isEmpty) return;
+    final message = "StudySync: You joined '$courseName'. See you there!";
+    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message});
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open SMS app.')),
+      );
+    }
   }
 
   // ── Build helpers ─────────────────────────────────────────────────────────
@@ -507,7 +526,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   child: ElevatedButton(
                     onPressed: isMember || groupId.isEmpty
                         ? null
-                        : () => _joinGroup(groupId),
+                        : () => _joinGroup(groupId, course),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isMember
                           ? Colors.grey.shade200

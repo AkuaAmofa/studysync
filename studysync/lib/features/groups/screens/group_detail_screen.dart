@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:studysync/core/constants/app_constants.dart';
 import 'package:studysync/core/providers/app_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class GroupDetailScreen extends ConsumerStatefulWidget {
   final String groupId;
@@ -104,12 +105,39 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
           const SnackBar(content: Text('Joined!'), backgroundColor: AppConstants.secondaryColor),
         );
       }
+      _sendSmsConfirmation(_group?['course_name'] as String? ?? 'the group');
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not join group.')),
         );
       }
+    }
+  }
+
+  Future<void> _sendSmsConfirmation(String courseName) async {
+    final user = await ref.read(authServiceProvider).getCurrentUser();
+    final phone = user?['phone_number'] as String?;
+    if (phone == null || phone.isEmpty) return;
+    final message = "StudySync: You joined '$courseName'. See you there!";
+    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message});
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open SMS app.')),
+      );
+    }
+  }
+
+  Future<void> _launchCall(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open phone dialer.')),
+      );
     }
   }
 
@@ -339,6 +367,8 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                   children: List.generate(_members.length, (i) {
                     final name =
                         _members[i]['name'] as String? ?? '?';
+                    final phone =
+                        _members[i]['phone_number'] as String?;
                     final color =
                         _avatarColors[i % _avatarColors.length];
                     return Padding(
@@ -369,6 +399,17 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                                   color: Colors.black54),
                             ),
                           ),
+                          if (phone != null && phone.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            GestureDetector(
+                              onTap: () => _launchCall(phone),
+                              child: const Icon(
+                                Icons.phone,
+                                size: 16,
+                                color: AppConstants.secondaryColor,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     );

@@ -17,6 +17,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _programme;
@@ -34,6 +35,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -70,6 +72,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         password: _passwordController.text,
         programme: _programme!,
         yearGroup: _yearGroup!,
+        phoneNumber: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
       );
       if (mounted) context.go('/map');
     } on DioException catch (e) {
@@ -218,6 +223,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     }),
                   ),
                 ],
+                const SizedBox(height: 14),
+
+                // Phone number (optional)
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                    labelText: 'Phone number (optional)',
+                    hintText: 'e.g. +233 20 000 0000',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
                 const SizedBox(height: 14),
 
                 // Programme dropdown

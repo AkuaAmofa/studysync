@@ -13,6 +13,7 @@ class AuthService {
     required String password,
     required String programme,
     required int yearGroup,
+    String? phoneNumber,
   }) async {
     final response = await _dio.post('/auth/register', data: {
       'name': name,
@@ -20,6 +21,7 @@ class AuthService {
       'password': password,
       'programme': programme,
       'year_group': yearGroup,
+      'phone_number': phoneNumber,
     });
     final token = response.data['token'] as String;
     final user = Map<String, dynamic>.from(response.data['user'] as Map);

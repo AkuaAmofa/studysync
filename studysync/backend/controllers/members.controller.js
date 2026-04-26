@@ -92,7 +92,7 @@ async function getMembers(req, res) {
     const { id: group_id } = req.params;
 
     const [members] = await pool.query(
-      `SELECT u.user_id, u.name, u.email, u.programme, u.year_group, m.joined_at
+      `SELECT u.user_id, u.name, u.email, u.programme, u.year_group, u.phone_number, m.joined_at
        FROM ss_group_members m
        JOIN ss_users u ON m.user_id = u.user_id
        WHERE m.group_id = ?`,

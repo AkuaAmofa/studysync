@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:studysync/core/constants/app_constants.dart';
 import 'package:studysync/core/providers/app_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
   const CreateGroupScreen({super.key});
@@ -60,6 +61,23 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
     debugPrint('[CreateGroup] Coords: $_lat, $_lng | ready: $_gpsReady');
   }
 
+  // ── SMS ───────────────────────────────────────────────────────────────────
+
+  Future<void> _sendSmsConfirmation(String courseName) async {
+    final user = await ref.read(authServiceProvider).getCurrentUser();
+    final phone = user?['phone_number'] as String?;
+    if (phone == null || phone.isEmpty) return;
+    final message = "StudySync: You created the group '$courseName'. Good luck studying!";
+    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message});
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open SMS app.')),
+      );
+    }
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -83,6 +101,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           backgroundColor: AppConstants.secondaryColor,
         ),
       );
+      _sendSmsConfirmation(_courseController.text.trim());
       context.go('/map');
     } on DioException catch (e) {
       final msg =

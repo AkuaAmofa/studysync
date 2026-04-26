@@ -5,7 +5,7 @@ const pool = require('../config/db');
 
 async function register(req, res) {
   try {
-    const { name, email, password, programme, year_group } = req.body;
+    const { name, email, password, programme, year_group, phone_number } = req.body;
 
     if (!name || !email || !password || !programme || !year_group) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -23,9 +23,9 @@ async function register(req, res) {
     const user_id = uuidv4();
 
     await pool.query(
-      `INSERT INTO ss_users (user_id, name, email, password_hash, programme, year_group)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [user_id, name, email, password_hash, programme, year_group]
+      `INSERT INTO ss_users (user_id, name, email, password_hash, programme, year_group, phone_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [user_id, name, email, password_hash, programme, year_group, phone_number || null]
     );
 
     const token = jwt.sign(
@@ -36,7 +36,7 @@ async function register(req, res) {
 
     return res.status(201).json({
       token,
-      user: { user_id, name, email, programme, year_group, role: 'user' },
+      user: { user_id, name, email, phone_number: phone_number || null, programme, year_group, role: 'user' },
     });
   } catch (err) {
     console.error('register error:', err);
