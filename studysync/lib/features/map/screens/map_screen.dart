@@ -136,12 +136,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (_currentPosition != null) {
       markers.add(Marker(
         point: _currentPosition!,
-        width: 44,
-        height: 44,
-        child: const _PinMarker(
-          color: AppConstants.primaryColor,
-          icon: Icons.person_pin_circle,
-          tooltip: 'You are here',
+        width: 40,
+        height: 40,
+        child: Tooltip(
+          message: 'You are here',
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: AppConstants.primaryColor,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 22),
+          ),
         ),
       ));
     }
